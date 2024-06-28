@@ -1,0 +1,120 @@
+{
+    "meta": {
+        "title": "EESSI status!",
+        "logging_level": "WARN",
+        "contact_email": "support@eessi.io",
+        "repo_url": "https://www.eessi.io/docs/repositories/pilot",
+        "repo_url_text": "EESSI Pilot documentation"
+    },
+    "servers": [
+        {
+            "hostname": "rug-nl-s0.eessi.science",
+            "server_type": "Stratum0",
+            "backend_type": "CVMFS"
+        },
+        {
+            "hostname": "aws-eu-central-s1.eessi.science",
+            "server_type": "Stratum1",
+            "backend_type": "CVMFS"
+        },
+        {
+            "hostname": "azure-us-east-s1.eessi.science",
+            "server_type": "Stratum1"
+        },
+        {
+            "hostname": "aws-eu-west-s1-sync.eessi.science",
+            "server_type": "SyncServer",
+            "backend_type": "S3"
+        }
+    ],
+    "repositories": [
+        "software.eessi.io",
+        "dev.eessi.io",
+        "riscv.eessi.io"
+    ],
+    "ignored_repositories": [
+        "test.eessi.io"
+    ],
+    "rules": [
+        {
+            "id": "stratum1_servers",
+            "description": "Stratum1 servers",
+            "conditions": [
+                {
+                    "status": "FAILED",
+                    "when": "stratum1_servers == 0"
+                },
+                {
+                    "status": "WARNING",
+                    "when": "stratum1_servers == 1"
+                },
+                {
+                    "status": "DEGRADED",
+                    "when": "stratum1_servers > 1 && stratum1_servers < 2"
+                },
+                {
+                    "status": "OK",
+                    "when": "stratum1_servers >= 2"
+                }
+            ]
+        },
+        {
+            "id": "stratum0_servers",
+            "description": "Stratum0 servers",
+            "conditions": [
+                {
+                    "status": "FAILED",
+                    "when": "stratum0_servers == 0"
+                },
+                {
+                    "status": "OK",
+                    "when": "stratum0_servers > 0"
+                }
+            ]
+        },
+        {
+            "id": "sync_servers",
+            "description": "Sync servers",
+            "conditions": [
+                {
+                    "status": "FAILED",
+                    "when": "sync_servers == 0"
+                },
+                {
+                    "status": "OK",
+                    "when": "sync_servers > 0"
+                }
+            ]
+        },
+        {
+            "id": "eessi_status",
+            "description": "EESSI status",
+            "conditions": [
+                {
+                    "status": "FAILED",
+                    "when": "stratum1_servers == 0"
+                },
+                {
+                    "status": "WARNING",
+                    "when": "stratum0_servers == 0 && stratum1_servers > 1"
+                },
+                {
+                    "status": "WARNING",
+                    "when": "sync_servers == 0 && stratum1_servers > 1"
+                },
+                {
+                    "status": "DEGRADED",
+                    "when": "stratum0_servers == 1 && stratum1_servers == 1"
+                },
+                {
+                    "status": "DEGRADED",
+                    "when": "repos_out_of_sync > 1"
+                },
+                {
+                    "status": "OK",
+                    "when": "stratum0_servers > 0 && stratum1_servers > 1 && sync_servers > 0"
+                }
+            ]
+        }
+    ]
+}
