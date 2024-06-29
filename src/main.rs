@@ -3,9 +3,6 @@ mod dependecies;
 mod models;
 mod templating;
 
-use std::io::Write;
-use tempfile::NamedTempFile;
-
 use clap::{command, Parser};
 use std::{path::PathBuf, process::exit};
 
@@ -13,7 +10,7 @@ use config::{get_config_manager, init_config};
 use cvmfs_server_scraper::{scrape_servers, ServerType};
 use templating::{get_legends, render_template_to_file, RepoStatus};
 
-use crate::dependecies::populate;
+use crate::dependecies::{atomic_write, populate};
 use crate::models::{EESSIStatus, Status, StatusPageData, StratumStatus};
 
 use log::{debug, info, trace};
@@ -178,33 +175,19 @@ async fn main() {
     let output_file = args.output_file.to_str().unwrap();
     render_template_to_file("status.html", context, destination, output_file);
     populate(destination, args.force_resource_creation).unwrap();
-    generate_json_output(
-        &status_page_data,
-        destination,
-        args.json_output_file.to_str().unwrap(),
-    )
-    .unwrap();
+    generate_json_output(&status_page_data, args.destination, args.json_output_file).unwrap();
 }
 
 fn generate_json_output(
     data: &StatusPageData,
-    destination: &str,
-    filename: &str,
+    destination: PathBuf,
+    filename: PathBuf,
 ) -> std::io::Result<()> {
-    trace!("Generating JSON output file: {}/{}", destination, filename);
+    let fqfn = destination.join(filename);
+    trace!("Generating JSON output file: {:?}", fqfn);
+
     let json = serde_json::to_string_pretty(data)?;
-
-    // Create a temporary file in the destination directory
-    let dir = std::path::Path::new(destination);
-    let mut temp_file = NamedTempFile::new_in(dir)?;
-
-    // Write the JSON data to the temporary file
-    temp_file.write_all(json.as_bytes())?;
-
-    // Persist the temporary file, replacing the target file atomically
-    let target_path = dir.join(filename);
-    temp_file.persist(target_path)?;
-    info!("JSON output file written to: {}/{}", destination, filename);
-
+    atomic_write(&fqfn, json.as_bytes()).unwrap();
+    info!("JSON output file written to: {:?}", fqfn);
     Ok(())
 }

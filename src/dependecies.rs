@@ -85,7 +85,7 @@ fn create_status_template(output_dir: &Path, force: bool) -> io::Result<()> {
     atomic_write(&template_path, STATUS_TEMPLATE.as_bytes())
 }
 
-fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
+pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
     let dir = path.parent().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
