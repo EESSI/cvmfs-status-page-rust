@@ -104,11 +104,14 @@ impl Status {
     /// If the revision is off by more than 1, return FAILED.
     pub fn get_repo_revision_status(
         repo: &PopulatedRepositoryOrReplica,
-        scraped_servers: Vec<ScrapedServer>,
+        scraped_servers: &[ScrapedServer],
     ) -> Self {
-        let good_servers: Vec<PopulatedServer> = scraped_servers
-            .into_iter()
-            .filter_map(|s| s.get_populated_server().ok())
+        let good_servers: Vec<&PopulatedServer> = scraped_servers
+            .iter()
+            .filter_map(|s| match s {
+                ScrapedServer::Populated(server) => Some(server),
+                ScrapedServer::Failed(_) => None,
+            })
             .collect();
 
         let stratum0 = good_servers
@@ -191,51 +194,53 @@ pub struct StatusManager {
 
 impl StatusManager {
     pub fn new(scraped_servers: Vec<ScrapedServer>) -> Self {
-        let mut servers: Vec<Server> = Vec::new();
-
-        for server in scraped_servers.clone() {
-            let mut repositories: Vec<Repositories> = Vec::new();
-
-            match server {
+        let servers: Vec<Server> = scraped_servers
+            .iter()
+            .map(|server| match server {
                 ScrapedServer::Populated(server) => {
-                    let mut overall_status = Status::OK;
-                    for repo in server.repositories {
-                        let status_revision =
-                            Status::get_repo_revision_status(&repo, scraped_servers.clone());
-                        overall_status = status_revision;
-                        repositories.push(Repositories {
-                            name: repo.name.clone(),
-                            revision: repo.revision(),
-                            status: overall_status,
-                            status_revision,
-                        });
-                    }
+                    let repositories: Vec<Repositories> = server
+                        .repositories
+                        .iter()
+                        .map(|repo| {
+                            let status_revision =
+                                Status::get_repo_revision_status(repo, &scraped_servers);
+                            Repositories {
+                                name: repo.name.clone(),
+                                revision: repo.revision(),
+                                status: status_revision,
+                                status_revision,
+                            }
+                        })
+                        .collect();
 
-                    servers.push(Server {
+                    let overall_status = repositories
+                        .iter()
+                        .map(|repo| repo.status)
+                        .max()
+                        .unwrap_or(Status::OK);
+
+                    Server {
                         server_type: server.server_type,
                         backend_type: server.backend_type,
                         backend_detected: Some(server.backend_detected),
-                        hostname: server.hostname,
+                        hostname: server.hostname.clone(),
                         repositories,
                         status: overall_status,
-                    });
+                    }
                 }
-                ScrapedServer::Failed(server) => {
-                    servers.push(Server {
-                        server_type: server.server_type,
-                        backend_type: server.backend_type,
-                        backend_detected: None,
-                        hostname: server.hostname,
-                        repositories,
-                        status: Status::FAILED,
-                    });
-                }
-            }
-        }
+                ScrapedServer::Failed(server) => Server {
+                    server_type: server.server_type,
+                    backend_type: server.backend_type,
+                    backend_detected: None,
+                    hostname: server.hostname.clone(),
+                    repositories: Vec::new(),
+                    status: Status::FAILED,
+                },
+            })
+            .collect();
 
         StatusManager { servers }
     }
-
     pub fn get_by_type(&self, server_type: ServerType) -> Vec<&Server> {
         self.servers
             .iter()
@@ -309,55 +314,60 @@ impl StatusManager {
     }
 
     pub fn status_overall(&self, conditions: Vec<Condition>) -> Status {
+        debug!("Conditions for overall status: {:?}", conditions.len());
         let status = self.evaluate_overall_conditions(conditions);
-        info!("Checking overall status: {:?}", status);
+        info!("Overall status: {:?}", status);
         status
     }
 
     pub fn status_stratum1(&self, conditions: Vec<Condition>) -> Status {
+        debug!("Conditions for stratum1s: {:?}", conditions.len());
         let status = evaluate_conditions_with_key_value(
             conditions,
             "stratum1_servers",
             self.get_by_type_ok(ServerType::Stratum1).len(),
         );
-        info!("Checking stratum1 status: {:?}", status);
+        info!("Stratum1 status: {:?}", status);
         status
     }
 
     pub fn status_stratum0(&self, conditions: Vec<Condition>) -> Status {
+        debug!("Conditions for stratum0s: {:?}", conditions.len());
         let status = evaluate_conditions_with_key_value(
             conditions,
             "stratum0_servers",
             self.get_by_type_ok(ServerType::Stratum0).len(),
         );
-        info!("Checking stratum0 status: {:?}", status);
+        info!("Stratum0 status: {:?}", status);
         status
     }
 
     pub fn details_stratum0(&self) -> Vec<String> {
         let stratum0s = self.get_by_type_ok(ServerType::Stratum0);
+
         if stratum0s.is_empty() {
             return vec!["No stratum0 servers scraped!".to_string()];
         }
 
-        let mut details = Vec::new();
-
-        for stratum0 in stratum0s {
-            for repo in &stratum0.repositories {
-                details.push(format!("{}:{}", repo.name, repo.revision));
-            }
-        }
-
-        details
+        stratum0s
+            .iter()
+            .flat_map(|stratum0| {
+                stratum0
+                    .repositories
+                    .iter()
+                    .map(|repo| format!("{}:{}", repo.name, repo.revision))
+            })
+            .collect()
     }
 
     pub fn status_syncserver(&self, conditions: Vec<Condition>) -> Status {
+        debug!("Conditions for syncservers: {:?}", conditions.len());
         let status = evaluate_conditions_with_key_value(
             conditions,
             "sync_servers",
             self.get_by_type_ok(ServerType::SyncServer).len(),
         );
-        info!("Checking sync server status: {:?}", status);
+        info!("Syncserver status: {:?}", status);
         status
     }
 
@@ -433,28 +443,25 @@ impl StatusManager {
 
 fn compare_with_other_stratum1s(
     repo: &PopulatedRepositoryOrReplica,
-    all_servers: &[PopulatedServer],
+    all_servers: &[&PopulatedServer],
 ) -> Status {
-    let stratum1s: Vec<&PopulatedServer> = all_servers
+    let max_divergence = all_servers
         .iter()
-        .filter(|s| s.server_type == ServerType::Stratum1)
-        .collect();
+        .filter(|&&s| s.server_type == ServerType::Stratum1)
+        .flat_map(|&stratum1| {
+            stratum1
+                .repositories
+                .iter()
+                .find(|r| r.name == repo.name)
+                .map(|stratum1_repo| (repo.revision() - stratum1_repo.revision()).abs())
+        })
+        .max()
+        .unwrap_or(0);
 
-    let mut max_divergence = 0;
-
-    for stratum1 in stratum1s {
-        if let Some(stratum1_repo) = stratum1.repositories.iter().find(|r| r.name == repo.name) {
-            let divergence = (repo.revision() - stratum1_repo.revision()).abs();
-            max_divergence = max_divergence.max(divergence);
-        }
-    }
-
-    if max_divergence == 0 {
-        Status::OK
-    } else if max_divergence == 1 {
-        Status::WARNING
-    } else {
-        Status::FAILED
+    match max_divergence {
+        0 => Status::OK,
+        1 => Status::WARNING,
+        _ => Status::FAILED,
     }
 }
 
@@ -462,19 +469,17 @@ fn compare_with_stratum0(
     repo: &PopulatedRepositoryOrReplica,
     stratum0: &PopulatedServer,
 ) -> Status {
-    let mut max_divergence = 0;
+    let divergence = stratum0
+        .repositories
+        .iter()
+        .find(|r| r.name == repo.name)
+        .map(|stratum0_repo| (repo.revision() - stratum0_repo.revision()).abs())
+        .unwrap_or(0);
 
-    if let Some(stratum0_repo) = stratum0.repositories.iter().find(|r| r.name == repo.name) {
-        let divergence = (repo.revision() - stratum0_repo.revision()).abs();
-        max_divergence = max_divergence.max(divergence);
-    }
-
-    if max_divergence == 0 {
-        Status::OK
-    } else if max_divergence == 1 {
-        Status::WARNING
-    } else {
-        Status::FAILED
+    match divergence {
+        0 => Status::OK,
+        1 => Status::WARNING,
+        _ => Status::FAILED,
     }
 }
 
@@ -494,15 +499,14 @@ fn evaluate_conditions_with_key_value(
 
     let engine = Engine::new();
 
-    for condition in conditions {
-        debug!(
-            "Evaluating condition: {:?} (key: <{:?}>, val <{:?}>)",
-            condition, key, value
-        );
-        if evaluate_condition(&condition, &mut scope, &engine) {
-            return condition.status;
-        }
-    }
-
-    Status::FAILED
+    conditions
+        .iter()
+        .inspect(|condition| {
+            debug!(
+                "Evaluating condition: {:?} (key: <{:?}>, val <{:?}>)",
+                condition, key, value
+            );
+        })
+        .find(|&condition| evaluate_condition(condition, &mut scope, &engine))
+        .map_or(Status::FAILED, |condition| condition.status)
 }

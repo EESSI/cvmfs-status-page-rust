@@ -1,41 +1,49 @@
+use anyhow::{Context, Result};
 use log::{info, trace};
 use serde::Serialize;
-use std::{io::Write, vec};
+use std::io::Write;
+use std::path::Path;
 use tempfile::NamedTempFile;
 use tera::Tera;
 
 use crate::models::Status;
 
-pub fn init_templates() -> Tera {
-    Tera::new("templates/*.html").unwrap()
+pub fn init_templates() -> Result<Tera> {
+    Tera::new("templates/*.html").context("Failed to initialize Tera templates")
 }
 
-pub fn render_template(template_name: &str, context: tera::Context) -> String {
-    init_templates().render(template_name, &context).unwrap()
+pub fn render_template(template_name: &str, context: &tera::Context) -> Result<String> {
+    init_templates()?
+        .render(template_name, context)
+        .context(format!("Failed to render template: {}", template_name))
 }
 
 pub fn render_template_to_file(
     template_name: &str,
-    context: tera::Context,
+    context: &tera::Context,
     destination: &str,
     filename: &str,
-) {
-    let rendered = render_template(template_name, context);
-    let fqfn = format!("{}/{}", destination, filename);
+) -> Result<()> {
+    let rendered = render_template(template_name, context)?;
+    let fqfn = Path::new(destination).join(filename);
 
-    let mut tmpfile = NamedTempFile::new_in(destination).expect("Failed to create temporary file");
+    let mut tmpfile = NamedTempFile::new_in(destination).context(format!(
+        "Failed to create temporary file in {}",
+        destination
+    ))?;
 
     trace!("Writing to temporary file: {:?}", tmpfile.path());
     tmpfile
         .write_all(rendered.as_bytes())
-        .expect("Failed to write to temporary file");
+        .context("Failed to write to temporary file")?;
 
     trace!("Persisting temporary file: {:?}", fqfn);
     tmpfile
-        .persist(fqfn.clone())
-        .expect("Failed to persist temporary file");
+        .persist(&fqfn)
+        .context(format!("Failed to persist temporary file to {:?}", fqfn))?;
 
     info!("Rendered template to file: {:?}", fqfn);
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -47,22 +55,21 @@ pub struct StatusInfo {
 }
 
 pub fn get_legends() -> Vec<StatusInfo> {
-    let mut legend = vec![];
-    for status in [
+    [
         Status::OK,
         Status::DEGRADED,
         Status::WARNING,
         Status::FAILED,
         Status::MAINTENANCE,
-    ] {
-        legend.push(StatusInfo {
-            status,
-            class: status.class().to_string(),
-            text: status.text().to_string(),
-            description: status.description().to_string(),
-        });
-    }
-    legend
+    ]
+    .iter()
+    .map(|&status| StatusInfo {
+        status,
+        class: status.class().to_string(),
+        text: status.text().to_string(),
+        description: status.description().to_string(),
+    })
+    .collect()
 }
 
 #[derive(Serialize)]
@@ -84,6 +91,7 @@ pub struct RepoStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     use yare::parameterized;
 
     #[parameterized(
@@ -147,7 +155,11 @@ mod tests {
         server1 = { "test_server", "status-ok", "status-warning" },
         server2 = { "another_server", "status-failed", "status-degraded" }
     )]
-    fn test_server_status_serialization(name: &str, update_class: &str, geoapi_class: &str) {
+    fn test_server_status_serialization(
+        name: &str,
+        update_class: &str,
+        geoapi_class: &str,
+    ) -> Result<()> {
         let status = ServerStatus {
             name: name.to_string(),
             status: Status::OK,
@@ -155,17 +167,22 @@ mod tests {
             geoapi_class: geoapi_class.to_string(),
         };
 
-        let serialized = serde_json::to_string(&status).unwrap();
+        let serialized = serde_json::to_string(&status)?;
         assert!(serialized.contains(name));
         assert!(serialized.contains(update_class));
         assert!(serialized.contains(geoapi_class));
+        Ok(())
     }
 
     #[parameterized(
         repo1 = { "test_repo", "status-ok", "status-degraded" },
         repo2 = { "another_repo", "status-warning", "status-failed" }
     )]
-    fn test_repo_status_serialization(name: &str, revision_class: &str, snapshot_class: &str) {
+    fn test_repo_status_serialization(
+        name: &str,
+        revision_class: &str,
+        snapshot_class: &str,
+    ) -> Result<()> {
         let status = RepoStatus {
             name: name.to_string(),
             status: Status::OK,
@@ -173,9 +190,10 @@ mod tests {
             snapshot_class: snapshot_class.to_string(),
         };
 
-        let serialized = serde_json::to_string(&status).unwrap();
+        let serialized = serde_json::to_string(&status)?;
         assert!(serialized.contains(name));
         assert!(serialized.contains(revision_class));
         assert!(serialized.contains(snapshot_class));
+        Ok(())
     }
 }
