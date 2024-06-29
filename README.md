@@ -9,7 +9,7 @@ This repository contains the source code for an EESSI status page generator. The
 - Generates both HTML and JSON status reports.
 - Automatically populates required resources (images, fonts, CSS, JS, templates, etc.) into the destination directory.
 - Supports local editing of resource files, and overwriting them back to the defaults with the `--force` option.
-- Evaluates rules for status conditions using [https://rhai.rs](Rhai).
+- Evaluates rules for status conditions using [Rhai](https://rhai.rs).
 - Supports CVMFS, S3, and AutoDetect as backends for CVMFS servers.
 
 ## Installation
@@ -71,9 +71,64 @@ For servers that are set to or detected as CVMFS, the scraper will scrape the un
 
 ## Condition Evaluation for Status
 
-Rules for conditions are evaluated using Rhai, and are evaluated in order. Valid variables for the conditions are:
+There are four supported status conditions that are evaluated:
+
+- `eessi_status`: The overall status for EESSI.
+- `stratum0_servers`: The status for stratum0 servers.
+- `stratum1_servers`: The status for stratum1 servers.
+- `sync_servers`: The status for sync servers.
+
+Each of these status conditions can have any number of rules associated with them, each with a `status` key that can be set to `OK`, `DEGRADED`, `WARNING`, or `FAILED`. The rules are evaluated in order, and the first matching rule will set the status for the condition in question.
+
+Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evaluated in order. The first matching rule will set the given status for the case in question. Valid variables for the conditions are:
 
 - `stratum0_servers`: The number of stratum0 servers successfully scraped
 - `stratum1_servers`: The number of stratum1 servers successfully scraped
 - `sync_servers`: The number of sync servers successfully scraped
 - `repos_out_of_sync`: The number of repositories out of sync across all servers scraped
+
+### Example of rules
+
+Imagine these conditions for the overall status, `eessi_status`:
+
+```json
+{
+    "id": "eessi_status",
+    "description": "EESSI status",
+    "conditions": [
+        {
+            "status": "FAILED",
+            "when": "stratum1_servers == 0"
+        },
+        {
+            "status": "WARNING",
+            "when": "stratum0_servers == 0 && stratum1_servers > 1"
+        },
+        {
+            "status": "WARNING",
+            "when": "sync_servers == 0 && stratum1_servers > 1"
+        },
+        {
+            "status": "DEGRADED",
+            "when": "stratum0_servers == 1 && stratum1_servers == 1"
+        },
+        {
+            "status": "DEGRADED",
+            "when": "repos_out_of_sync > 1"
+        },
+        {
+            "status": "OK",
+            "when": "stratum0_servers > 0 && stratum1_servers > 1 && sync_servers > 0"
+        }
+    ]
+}
+```
+
+In this example, as the rules are applied in order, the engine will check, in order:
+
+1. If there are no stratum1 servers online, the status is set to `FAILED`.
+2. If there are no stratum0 servers online and more than one stratum1 server, the status is set to `WARNING`.
+3. If there are no sync servers online and more than one stratum1 server, the status is set to `WARNING`.
+4. If the stratum0 server is online and only one stratum1 server was found, the status is set to `DEGRADED`.
+5. If more than one repository is out of sync, the status is set to `DEGRADED`.
+6. If there is at least one stratum0 server, more than one stratum1 server, and at least one sync server, the status is set to `OK`.
