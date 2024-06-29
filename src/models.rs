@@ -11,7 +11,7 @@ use cvmfs_server_scraper::{
 };
 
 use crate::config::Condition;
-use crate::templating::{RepoStatus, ServerStatus};
+use crate::templating::{RepoStatus, ServerStatus, StatusInfo};
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy, Eq)]
@@ -123,6 +123,38 @@ impl Status {
     }
 }
 
+#[derive(Serialize)]
+pub struct StatusPageData {
+    pub title: String,
+    pub eessi_status: EESSIStatus,
+    pub contact_email: String,
+    pub last_update: String,
+    pub legend: Vec<StatusInfo>,
+    pub stratum0: StratumStatus,
+    pub stratum1: StratumStatus,
+    pub syncservers: StratumStatus,
+    pub repositories_status: RepoStatus,
+    pub repositories: Vec<RepoStatus>,
+}
+
+#[derive(Serialize)]
+pub struct EESSIStatus {
+    pub status: Status,
+    pub class: String,
+    pub text: String,
+    pub description: String,
+}
+
+#[derive(Serialize)]
+pub struct StratumStatus {
+    pub status: Status,
+    pub status_class: String,
+    pub details: Vec<String>,
+    pub servers: Vec<ServerStatus>,
+}
+
+// Ensure that Legend, RepoStatus, and ServerStatus are also derived from Serialize
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Repositories {
     pub name: String,
@@ -146,6 +178,7 @@ impl Server {
     pub fn to_server_status(&self) -> ServerStatus {
         ServerStatus {
             name: self.hostname.clone().to_string(),
+            status: self.status,
             update_class: self.status.class().to_string(),
             geoapi_class: Status::OK.class().to_string(),
         }
@@ -337,6 +370,7 @@ impl StatusManager {
         for (name, status) in self.get_status_per_unique_repo() {
             repos.push(RepoStatus {
                 name,
+                status,
                 revision_class: status.class().to_string(),
                 snapshot_class: Status::OK.class().to_string(),
             });

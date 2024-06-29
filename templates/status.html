@@ -8,7 +8,7 @@
     <link rel="stylesheet" type="text/css" href="fa.all.min.css">
     <script src="status.js" type="text/javascript"></script>
 
-    <title>{{ title }}</title>
+    <title>{{ data.title }}</title>
 </head>
 
 <body>
@@ -16,7 +16,7 @@
     <div class="header-row">
         <div class="header-text">
             <div class="content">
-                <h1 class="content-left">{{ title }}</h1>
+                <h1 class="content-left">{{ data.title }}</h1>
                 <img class="content-right inline" src="eessi-512px.png" width="75px" />
             </div>
         </div>
@@ -25,13 +25,13 @@
     <div class="content-row">
 
         <div class="overall">
-            <div class="{{ eessi_status_class }} overall-info"></div>
-            <h1>{{ eessi_status_text }}</h1>
-            <p class="overall-description">{{ eessi_status_description }}</p>
+            <div class="{{ data.eessi_status.class }} overall-info"></div>
+            <h1>{{ data.eessi_status.text }}</h1>
+            <p class="overall-description">{{ data.eessi_status.description }}</p>
         </div>
 
         <div class="legend">
-            {% for item in legend %}
+            {% for item in data.legend %}
             <span class="{{ item.class }}"> {{ item.text }}</span>
             {% endfor %}
         </div>
@@ -41,12 +41,13 @@
                 <div class="infoblock stratum0">
                     <span class="fas fa-database infobox-icon"></span>
                     <h2>Stratum0</h2>
-                    <div class="content-right"><span class="{{ stratum0_status_class }} infoblock-statusicon"></span>
+                    <div class="content-right"><span
+                            class="{{ data.stratum0.status_class }} infoblock-statusicon"></span>
                     </div>
                 </div>
                 <div id="stratum0" class="expanded">
                     <ul class="details">
-                        {% for element in stratum0_details %}
+                        {% for element in data.stratum0.details %}
                         <li>{{ element }}</li>
                         {% endfor %}
                         <ul>
@@ -56,7 +57,8 @@
                 <div class="stratum1 infoblock">
                     <span class="fas fa-project-diagram infobox-icon"></span>
                     <h2>Stratum1s</h2>
-                    <div class="content-right"><span class="{{ stratum1_status_class }} infoblock-statusicon"></span>
+                    <div class="content-right"><span
+                            class="{{ data.stratum1.status_class }} infoblock-statusicon"></span>
                     </div>
                 </div>
                 <div id="stratum1" class="expanded">
@@ -67,7 +69,7 @@
                             <th class="geoapi">GeoAPI</th>
                         </tr>
 
-                        {% for server in stratum1s|sort(attribute="name") %}
+                        {% for server in data.stratum1.servers|sort(attribute="name") %}
                         <tr>
                             <td class="main">{{ server.name }}</td>
                             <td class="updates"><span class="{{ server.update_class }}"></span></td>
@@ -85,7 +87,8 @@
                 <div class="syncservers infoblock">
                     <span class="fas fa-tasks infobox-icon"></span>
                     <h2>Syncservers</h2>
-                    <div class="content-right"><span class="{{ syncservers_status_class }} infoblock-statusicon"></span>
+                    <div class="content-right"><span
+                            class="{{ data.syncservers.status_class }} infoblock-statusicon"></span>
                     </div>
                 </div>
 
@@ -97,7 +100,7 @@
                             <th class="geoapi">GeoAPI</th>
                         </tr>
 
-                        {% for server in syncservers|sort(attribute="name") %}
+                        {% for server in data.syncservers.servers|sort(attribute="name") %}
                         <tr>
                             <td class="main">{{ server.name }}</td>
                             <td class="updates"><span class="{{ server.update_class }}"></span></td>
@@ -112,7 +115,7 @@
                     <span class="fas fa-folder-open infobox-icon"></span>
                     <h2>Repositories</h2>
                     <div class="content-right"><span
-                            class="{{ repositories_status_class }} infoblock-statusicon"></span></div>
+                            class="{{ data.repositories_status.revision_class}} infoblock-statusicon"></span></div>
                 </div>
                 <div id="repositories" class="expanded">
                     <table class="details">
@@ -122,7 +125,7 @@
                             <th class="geoapi">Snapshot</th>
                         </tr>
 
-                        {% for repo in repositories|sort(attribute="name") %}
+                        {% for repo in data.repositories|sort(attribute="name") %}
                         <tr>
                             <td class="main">{{ repo.name }}</td>
                             <td class="updates"><span class="{{ repo.revision_class }}"></span></td>
@@ -135,7 +138,7 @@
         </div>
     </div>
 
-    <div class="footer">Last updated {{ last_update }} | {{ contact_email }}</div>
+    <div class="footer">Last updated {{ data.last_update }} | {{ data.contact_email }}</div>
 
 </body>
 

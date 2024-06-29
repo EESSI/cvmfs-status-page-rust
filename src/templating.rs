@@ -40,6 +40,7 @@ pub fn render_template_to_file(
 
 #[derive(Serialize)]
 pub struct StatusInfo {
+    pub status: Status,
     pub class: String,
     pub text: String,
     pub description: String,
@@ -55,6 +56,7 @@ pub fn get_legends() -> Vec<StatusInfo> {
         Status::MAINTENANCE,
     ] {
         legend.push(StatusInfo {
+            status,
             class: status.class().to_string(),
             text: status.text().to_string(),
             description: status.description().to_string(),
@@ -66,6 +68,7 @@ pub fn get_legends() -> Vec<StatusInfo> {
 #[derive(Serialize)]
 pub struct ServerStatus {
     pub name: String,
+    pub status: Status,
     pub update_class: String,
     pub geoapi_class: String,
 }
@@ -73,6 +76,7 @@ pub struct ServerStatus {
 #[derive(Serialize)]
 pub struct RepoStatus {
     pub name: String,
+    pub status: Status,
     pub revision_class: String,
     pub snapshot_class: String,
 }
@@ -146,6 +150,7 @@ mod tests {
     fn test_server_status_serialization(name: &str, update_class: &str, geoapi_class: &str) {
         let status = ServerStatus {
             name: name.to_string(),
+            status: Status::OK,
             update_class: update_class.to_string(),
             geoapi_class: geoapi_class.to_string(),
         };
@@ -163,6 +168,7 @@ mod tests {
     fn test_repo_status_serialization(name: &str, revision_class: &str, snapshot_class: &str) {
         let status = RepoStatus {
             name: name.to_string(),
+            status: Status::OK,
             revision_class: revision_class.to_string(),
             snapshot_class: snapshot_class.to_string(),
         };
