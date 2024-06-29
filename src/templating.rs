@@ -1,5 +1,7 @@
+use log::{info, trace};
 use serde::Serialize;
-use std::vec;
+use std::{io::Write, vec};
+use tempfile::NamedTempFile;
 use tera::Tera;
 
 use crate::models::Status;
@@ -12,9 +14,28 @@ pub fn render_template(template_name: &str, context: tera::Context) -> String {
     init_templates().render(template_name, &context).unwrap()
 }
 
-pub fn render_template_to_file(template_name: &str, context: tera::Context, filename: &str) {
+pub fn render_template_to_file(
+    template_name: &str,
+    context: tera::Context,
+    destination: &str,
+    filename: &str,
+) {
     let rendered = render_template(template_name, context);
-    std::fs::write(filename, rendered).expect("Failed to write rendered template to file");
+    let fqfn = format!("{}/{}", destination, filename);
+
+    let mut tmpfile = NamedTempFile::new_in(destination).expect("Failed to create temporary file");
+
+    trace!("Writing to temporary file: {:?}", tmpfile.path());
+    tmpfile
+        .write_all(rendered.as_bytes())
+        .expect("Failed to write to temporary file");
+
+    trace!("Persisting temporary file: {:?}", fqfn);
+    tmpfile
+        .persist(fqfn.clone())
+        .expect("Failed to persist temporary file");
+
+    info!("Rendered template to file: {:?}", fqfn);
 }
 
 #[derive(Serialize)]

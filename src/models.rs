@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use log::debug;
+use log::{debug, info};
 use rhai::{Engine, Scope};
 use serde::{Deserialize, Serialize};
 
@@ -277,7 +277,7 @@ impl StatusManager {
 
     pub fn status_overall(&self, conditions: Vec<Condition>) -> Status {
         let status = self.evaluate_overall_conditions(conditions);
-        debug!("Checking overall status: {:?}", status);
+        info!("Checking overall status: {:?}", status);
         status
     }
 
@@ -287,7 +287,7 @@ impl StatusManager {
             "stratum1_servers",
             self.get_by_type_ok(ServerType::Stratum1).len(),
         );
-        debug!("Checking stratum1 status: {:?}", status);
+        info!("Checking stratum1 status: {:?}", status);
         status
     }
 
@@ -297,7 +297,7 @@ impl StatusManager {
             "stratum0_servers",
             self.get_by_type_ok(ServerType::Stratum0).len(),
         );
-        debug!("Checking stratum0 status: {:?}", status);
+        info!("Checking stratum0 status: {:?}", status);
         status
     }
 
@@ -324,7 +324,7 @@ impl StatusManager {
             "sync_servers",
             self.get_by_type_ok(ServerType::SyncServer).len(),
         );
-        debug!("Checking sync server status: {:?}", status);
+        info!("Checking sync server status: {:?}", status);
         status
     }
 

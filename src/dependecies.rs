@@ -1,66 +1,103 @@
 use include_dir::{include_dir, Dir};
+use log::{debug, info, trace};
 use std::fs;
+use std::io;
 use std::io::Write;
 use std::path::Path;
-
-use log::{debug, trace};
+use tempfile::NamedTempFile;
 
 const RESOURCES_DIR: Dir = include_dir!("resources");
+const STATUS_TEMPLATE: &str = include_str!("../templates/status.html");
 
-pub fn populate(path: &str) {
+pub fn populate(path: &str, force: bool) -> io::Result<()> {
     trace!("Contents of resources directory: {:?}", RESOURCES_DIR);
     let output_dir = Path::new(path);
-    debug!("Populating resources to {:?}", output_dir);
+    info!("Ensuring resources exist under: {:?}", output_dir);
 
-    // Create the output directory if it doesn't exist
-    if !output_dir.exists() {
-        debug!("Creating output directory");
-        fs::create_dir(output_dir).expect("Failed to create output directory");
-    }
+    fs::create_dir_all(output_dir)?;
 
-    for dir in RESOURCES_DIR.dirs() {
-        debug!("Creating directory {:?}", dir.path());
-        let output_path = output_dir.join(dir.path());
-        fs::create_dir_all(output_path).expect("Failed to create output directory");
+    populate_dirs_and_files(&RESOURCES_DIR, output_dir, force)?;
+    populate_root_files(output_dir, force)?;
+    create_status_template(output_dir, force)?;
 
-        for file in dir.files() {
-            debug!("Writing file {:?}", file.path());
-            let relative_path = file.path();
-            let output_path = output_dir.join(relative_path);
+    Ok(())
+}
 
-            // Create any necessary directories
-            if let Some(parent) = output_path.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent).expect("Failed to create directories");
-                }
+fn populate_dirs_and_files(dir: &Dir, output_dir: &Path, force: bool) -> io::Result<()> {
+    for entry in dir.entries() {
+        match entry {
+            include_dir::DirEntry::Dir(subdir) => {
+                let subdir_path = output_dir.join(subdir.path());
+                debug!("Ensuring directory: {:?}", subdir_path);
+                fs::create_dir_all(&subdir_path)?;
+                populate_dirs_and_files(subdir, &subdir_path, force)?;
             }
-
-            // Write the file contents
-            let mut output_file =
-                fs::File::create(&output_path).expect("Failed to create output file");
-            output_file
-                .write_all(file.contents())
-                .expect("Failed to write to output file");
+            include_dir::DirEntry::File(file) => {
+                write_file(file, output_dir, force)?;
+            }
         }
     }
+    Ok(())
+}
 
-    // Write the included files and directories to disk
+fn populate_root_files(output_dir: &Path, force: bool) -> io::Result<()> {
     for file in RESOURCES_DIR.files() {
-        debug!("Writing file {:?}", file.path());
-        let relative_path = file.path();
-        let output_path = output_dir.join(relative_path);
-
-        // Create any necessary directories
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).expect("Failed to create directories");
-            }
-        }
-
-        // Write the file contents
-        let mut output_file = fs::File::create(&output_path).expect("Failed to create output file");
-        output_file
-            .write_all(file.contents())
-            .expect("Failed to write to output file");
+        write_file(file, output_dir, force)?;
     }
+    Ok(())
+}
+
+fn write_file(file: &include_dir::File, output_dir: &Path, force: bool) -> io::Result<()> {
+    let output_path = output_dir.join(file.path());
+    trace!("Checking resource file: {:?}", file.path());
+
+    if should_skip_file(&output_path, force) {
+        debug!("Skipping existing file {:?}", output_path);
+        return Ok(());
+    }
+
+    debug!("Writing file {:?}", file.path());
+    ensure_parent_dir(&output_path)?;
+    atomic_write(&output_path, file.contents())
+}
+
+fn should_skip_file(path: &Path, force: bool) -> bool {
+    path.exists() && !force
+}
+
+fn ensure_parent_dir(path: &Path) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+fn create_status_template(output_dir: &Path, force: bool) -> io::Result<()> {
+    let template_path = output_dir.join("templates").join("status.html");
+    debug!("Creating status template: {:?}", template_path);
+
+    if should_skip_file(&template_path, force) {
+        debug!("Skipping existing status template");
+        return Ok(());
+    }
+
+    ensure_parent_dir(&template_path)?;
+    atomic_write(&template_path, STATUS_TEMPLATE.as_bytes())
+}
+
+fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
+    let dir = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid path: no parent directory",
+        )
+    })?;
+
+    let mut temp_file = NamedTempFile::new_in(dir)?;
+    trace!("Writing to temporary file {:?}", temp_file.path());
+    temp_file.write_all(contents)?;
+    temp_file.flush()?;
+    trace!("Renaming temporary file to {:?}", path);
+    temp_file.persist(path)?;
+    Ok(())
 }

@@ -10,7 +10,10 @@ use config::{get_config_manager, init_config};
 use cvmfs_server_scraper::{scrape_servers, ServerType};
 use templating::{get_legends, render_template_to_file, RepoStatus};
 
+use crate::dependecies::populate;
 use crate::models::Status;
+
+use log::debug;
 
 use models::StatusManager;
 
@@ -37,7 +40,7 @@ struct Opt {
         default_value = "config.json",
         help = "Configuration file."
     )]
-    configuration_file: PathBuf,
+    configuration: PathBuf,
 
     #[arg(
         short,
@@ -46,6 +49,22 @@ struct Opt {
         help = "Show the configuration and exit."
     )]
     show_config: bool,
+
+    #[arg(
+        short,
+        long,
+        default_value_t = false,
+        help = "Force overwrite of existing files."
+    )]
+    force_resource_creation: bool,
+
+    #[arg(
+        short,
+        long,
+        default_value = "index.html",
+        help = "Filename for the generated status page, will be placed in the destination directory."
+    )]
+    output_file: PathBuf,
 }
 
 #[tokio::main]
@@ -54,7 +73,9 @@ async fn main() {
 
     let args = Opt::parse();
 
-    init_config(args.configuration_file.to_str().unwrap());
+    debug!("Running with the following options: {:?}", args);
+
+    init_config(&args.configuration.to_str().unwrap());
 
     let config_manager = get_config_manager();
     let config = config_manager.get_config();
@@ -142,7 +163,7 @@ async fn main() {
     context.insert("repositories", &repos);
 
     let destination = args.destination.to_str().unwrap();
-    let output_file = &format!("{}/index.html", destination);
-    render_template_to_file("status.html", context, output_file);
-    dependecies::populate(destination);
+    let output_file = args.output_file.to_str().unwrap();
+    render_template_to_file("status.html", context, destination, output_file);
+    populate(destination, args.force_resource_creation).unwrap();
 }
