@@ -27,6 +27,8 @@ impl Stats {
     }
 }
 
+// clippy gets this one wrong, we need the closure.
+#[allow(clippy::redundant_closure)]
 static STATS: Lazy<Stats> = Lazy::new(|| Stats::new());
 
 pub fn populate(path: &str, force: bool) -> Result<()> {

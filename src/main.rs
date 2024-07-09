@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use log::{debug, info, trace};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 mod config;
 mod dependencies;
@@ -12,7 +13,7 @@ use config::{get_config_manager, init_config};
 use cvmfs_server_scraper::{scrape_servers, ServerType};
 use dependencies::{atomic_write, populate};
 use models::{EESSIStatus, Status, StatusManager, StatusPageData, StratumStatus};
-use templating::{get_legends, render_template_to_file, RepoStatus};
+use templating::{render_template_to_file, RepoStatus, StatusInfo};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -60,11 +61,19 @@ struct Opt {
         help = "Filename for the generated JSON status, will be placed in the destination directory."
     )]
     json_output_file: PathBuf,
+
+    #[arg(
+        short,
+        long,
+        help = "Generate a prometheus-style metrics/index.html in the destination directory."
+    )]
+    prometheus_metrics: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+    let run_start_time = chrono::Utc::now();
 
     let args = Opt::parse();
     debug!("Running with the following options: {:?}", args);
@@ -76,10 +85,14 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
-    let status_manager = create_status_manager(&config_manager).await?;
-    let status_page_data = generate_status_page_data(&config_manager, &status_manager)?;
+    let status_manager = create_status_manager(config_manager).await?;
+    let status_page_data = generate_status_page_data(config_manager, &status_manager)?;
 
     render_output(&args, &status_page_data)?;
+
+    if args.prometheus_metrics {
+        generate_prometheus_metrics(&args, &status_page_data, &run_start_time)?;
+    }
 
     Ok(())
 }
@@ -128,13 +141,48 @@ fn generate_status_page_data(
         eessi_status: create_eessi_status(eessi_status),
         contact_email: config.meta.contact_email.clone(),
         last_update: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        legend: get_legends(),
+        legend: StatusInfo::all(),
         stratum0: create_stratum_status(s0status, status_manager, ServerType::Stratum0),
         stratum1: create_stratum_status(s1status, status_manager, ServerType::Stratum1),
         syncservers: create_stratum_status(syncstatus, status_manager, ServerType::SyncServer),
         repositories_status: create_repo_status(),
         repositories: status_manager.details_repositories(),
+        config: config_manager.config.read().unwrap().clone(),
     })
+}
+
+fn generate_prometheus_metrics(
+    args: &Opt,
+    status_page_data: &StatusPageData,
+    timestamp: &DateTime<Utc>,
+) -> Result<()> {
+    use crate::models::StatusLevel;
+    let filename = args.destination.join("metrics");
+    trace!("Generating Prometheus metrics file: {:?}", filename);
+
+    let ms_since_epoch = timestamp.timestamp_millis();
+
+    let metrics = format!(
+        "# HELP eessi_status EESSI status\n# TYPE eessi_status gauge\n\
+        eessi_status {} {ms_since_epoch}\n\
+        # HELP stratum0_status Stratum0 status\n# TYPE stratum0_status gauge\n\
+        stratum0_status {} {ms_since_epoch}\n\
+        # HELP stratum1_status Stratum1 status\n# TYPE stratum1_status gauge\n\
+        stratum1_status {} {ms_since_epoch}\n\
+        # HELP syncservers_status SyncServers status\n# TYPE syncservers_status gauge\n\
+        syncservers_status {} {ms_since_epoch}\n\
+        # HELP repositories_status Repositories status\n# TYPE repositories_status gauge\n\
+        repositories_status {} {ms_since_epoch}\n",
+        status_page_data.eessi_status.level(),
+        status_page_data.stratum0.level(),
+        status_page_data.stratum1.level(),
+        status_page_data.syncservers.level(),
+        status_page_data.repositories_status.level()
+    );
+
+    atomic_write(&filename, metrics.as_bytes())?;
+    info!("Prometheus metrics file written to: {:?}", filename);
+    Ok(())
 }
 
 fn get_status<F>(
@@ -209,7 +257,7 @@ fn render_output(args: &Opt, status_page_data: &StatusPageData) -> Result<()> {
 
 fn generate_json_output(
     data: &StatusPageData,
-    destination: &PathBuf,
+    destination: &Path,
     filename: &PathBuf,
 ) -> Result<()> {
     let fqfn = destination.join(filename);

@@ -54,22 +54,18 @@ pub struct StatusInfo {
     pub description: String,
 }
 
-pub fn get_legends() -> Vec<StatusInfo> {
-    [
-        Status::OK,
-        Status::DEGRADED,
-        Status::WARNING,
-        Status::FAILED,
-        Status::MAINTENANCE,
-    ]
-    .iter()
-    .map(|&status| StatusInfo {
-        status,
-        class: status.class().to_string(),
-        text: status.text().to_string(),
-        description: status.description().to_string(),
-    })
-    .collect()
+impl StatusInfo {
+    pub fn all() -> Vec<Self> {
+        Status::all()
+            .iter()
+            .map(|&status| StatusInfo {
+                status,
+                class: status.class().to_string(),
+                text: status.text().to_string(),
+                description: status.description().to_string(),
+            })
+            .collect()
+    }
 }
 
 #[derive(Serialize)]
@@ -140,7 +136,7 @@ mod tests {
         expected_text: &str,
         expected_description: &str,
     ) {
-        let legends = get_legends();
+        let legends = StatusInfo::all();
         let info = legends
             .iter()
             .find(|info| info.text == key)

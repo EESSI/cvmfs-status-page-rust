@@ -4,17 +4,20 @@ use std::collections::HashMap;
 use log::{debug, info};
 use rhai::{Engine, Scope};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
+use strum_macros::{AsRefStr, EnumIter};
 
 use cvmfs_server_scraper::{
     Hostname, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer, ServerBackendType,
     ServerType,
 };
 
-use crate::config::Condition;
+use crate::config::{Condition, ConfigFile};
 use crate::templating::{RepoStatus, ServerStatus, StatusInfo};
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy, Eq, EnumIter, AsRefStr)]
+#[strum(ascii_case_insensitive)]
 pub enum Status {
     OK,
     DEGRADED,
@@ -52,18 +55,15 @@ impl Ord for Status {
 
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let text = match self {
-            Status::OK => "OK",
-            Status::DEGRADED => "DEGRADED",
-            Status::WARNING => "WARNING",
-            Status::FAILED => "FAILED",
-            Status::MAINTENANCE => "MAINENANCE",
-        };
-        write!(f, "{}", text)
+        write!(f, "{}", self.as_ref())
     }
 }
 
 impl Status {
+    pub fn all() -> Vec<Status> {
+        Status::iter().collect()
+    }
+
     pub fn class(&self) -> &str {
         match self {
             Status::OK => "status-ok fas fa-check",
@@ -138,6 +138,25 @@ pub struct StatusPageData {
     pub syncservers: StratumStatus,
     pub repositories_status: RepoStatus,
     pub repositories: Vec<RepoStatus>,
+    pub config: ConfigFile,
+}
+
+pub trait HasStatusField {
+    fn status(&self) -> Status;
+}
+
+pub trait StatusLevel: HasStatusField {
+    fn level(&self) -> i32 {
+        let status = self.status();
+
+        match status {
+            Status::OK => 0,
+            Status::DEGRADED => 1,
+            Status::WARNING => 2,
+            Status::FAILED => 3,
+            Status::MAINTENANCE => 9,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -155,6 +174,28 @@ pub struct StratumStatus {
     pub details: Vec<String>,
     pub servers: Vec<ServerStatus>,
 }
+
+impl HasStatusField for StratumStatus {
+    fn status(&self) -> Status {
+        self.status
+    }
+}
+
+impl HasStatusField for EESSIStatus {
+    fn status(&self) -> Status {
+        self.status
+    }
+}
+
+impl HasStatusField for RepoStatus {
+    fn status(&self) -> Status {
+        self.status
+    }
+}
+
+impl StatusLevel for StratumStatus {}
+impl StatusLevel for EESSIStatus {}
+impl StatusLevel for RepoStatus {}
 
 // Ensure that Legend, RepoStatus, and ServerStatus are also derived from Serialize
 
