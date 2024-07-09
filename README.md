@@ -40,6 +40,7 @@ Run the binary with the desired options:
 --force-resource-creation, -f: Force overwrite of existing files.
 --output-file, -o: Filename for the generated status page. Default is index.html.
 --json-output-file, -j: Filename for the generated JSON status. Default is status.json.
+--prometheus-metrics, -p: Enable Prometheus metrics generation.
 ```
 
 ### Example
@@ -131,3 +132,35 @@ In this example, as the rules are applied in order, the engine will check, in or
 4. If the stratum0 server is online and only one stratum1 server was found, the status is set to `DEGRADED`.
 5. If more than one repository is out of sync, the status is set to `DEGRADED`.
 6. If there is at least one stratum0 server, more than one stratum1 server, and at least one sync server, the status is set to `OK`.
+
+## Prometheus Metrics
+
+Prometheus metrics can be enabled with the `--prometheus-metrics` option. The metrics are exposed as the file `metrics` in the
+output directory and are generated with the timestamp being the start of the application. A typical metrics file will look
+like this:
+
+```prometheus
+# HELP eessi_status EESSI status
+# TYPE eessi_status gauge
+eessi_status 2 1720525887957
+# HELP stratum0_status Stratum0 status
+# TYPE stratum0_status gauge
+stratum0_status 3 1720525887957
+# HELP stratum1_status Stratum1 status
+# TYPE stratum1_status gauge
+stratum1_status 0 1720525887957
+# HELP syncservers_status SyncServers status
+# TYPE syncservers_status gauge
+syncservers_status 0 1720525887957
+# HELP repositories_status Repositories status
+# TYPE repositories_status gauge
+repositories_status 0 1720525887957
+```
+
+The status codes are:
+
+- `0`: OK
+- `1`: Degraded
+- `2`: Warning
+- `3`: Failed
+- `9`: Maintenance
