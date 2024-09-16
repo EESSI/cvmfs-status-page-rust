@@ -10,7 +10,7 @@ mod models;
 mod templating;
 
 use config::{get_config_manager, init_config};
-use cvmfs_server_scraper::{scrape_servers, ServerType};
+use cvmfs_server_scraper::{Scraper, ScraperCommon, ServerType};
 use dependencies::{atomic_write, populate};
 use models::{EESSIStatus, Status, StatusManager, StatusPageData, StratumStatus};
 use templating::{render_template_to_file, RepoStatus, StatusInfo};
@@ -108,7 +108,31 @@ fn init_and_get_config(args: &Opt) -> Result<&config::ConfigManager> {
 
 async fn create_status_manager(config_manager: &config::ConfigManager) -> Result<StatusManager> {
     let config = config_manager.get_config();
-    let scraped_servers = scrape_servers(config.servers.clone(), config.repositories.clone()).await;
+    let mut servers = vec![];
+
+    for server in &config.servers {
+        let hostname = server.hostname.clone();
+        let backend = server.backend_type.clone();
+        let server_type = server.server_type.clone();
+        servers.push(cvmfs_server_scraper::Server::new(
+            server_type,
+            backend,
+            hostname,
+        ));
+    }
+
+    let repolist = config.repositories.clone();
+    let ignored_repos = config.ignored_repositories.clone();
+
+    // Build a Scraper and scrape all servers in parallel
+    let scraped_servers = Scraper::new()
+        .forced_repositories(repolist)
+        .ignored_repositories(ignored_repos)
+        .with_servers(servers) // Transitions to a WithServer state.
+        .validate()? // Transitions to a ValidatedAndReady state, now immutable.
+        .scrape()
+        .await; // Perform the scrape, return servers.
+
     Ok(StatusManager::new(scraped_servers))
 }
 

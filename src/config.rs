@@ -74,8 +74,8 @@ impl ConfigManager {
                 "{} uses S3 as backend, but no repositories are explicitly provided to scrape",
                 s3_servers
                     .iter()
-                    .map(|s| s.hostname.as_str())
-                    .collect::<Vec<&str>>()
+                    .map(|s| s.hostname.to_string())
+                    .collect::<Vec<String>>()
                     .join(", ")
             );
         }
@@ -135,7 +135,7 @@ mod tests {
                 repo_url_text: "example.com".to_string(),
             },
             servers: vec![Server {
-                hostname: Hostname("example.com".to_string()),
+                hostname: Hostname::try_from("example.com".to_string()).unwrap(),
                 backend_type: ServerBackendType::CVMFS,
                 server_type: ServerType::Stratum1,
             }],
@@ -171,7 +171,7 @@ mod tests {
                 repo_url_text: "example.com".to_string(),
             },
             servers: vec![Server {
-                hostname: Hostname("example.com".to_string()),
+                hostname: Hostname::try_from("example.com".to_string()).unwrap(),
                 backend_type: ServerBackendType::S3,
                 server_type: ServerType::Stratum1,
             }],
