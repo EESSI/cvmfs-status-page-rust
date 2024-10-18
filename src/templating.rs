@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use cvmfs_server_scraper::ServerMetadata;
 use log::{info, trace};
 use serde::Serialize;
 use std::io::Write;
@@ -72,6 +73,7 @@ impl StatusInfo {
 pub struct ServerStatus {
     pub name: String,
     pub status: Status,
+    pub metadata: Option<ServerMetadata>,
     pub update_class: String,
     pub geoapi_class: String,
 }
@@ -159,6 +161,7 @@ mod tests {
         let status = ServerStatus {
             name: name.to_string(),
             status: Status::OK,
+            metadata: None,
             update_class: update_class.to_string(),
             geoapi_class: geoapi_class.to_string(),
         };

@@ -172,6 +172,7 @@ fn generate_status_page_data(
         repositories_status: create_repo_status(),
         repositories: status_manager.details_repositories(),
         config: config_manager.config.read().unwrap().clone(),
+        servers: status_manager.get_server_status_for_all(),
     })
 }
 

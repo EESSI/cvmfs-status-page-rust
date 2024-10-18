@@ -9,7 +9,7 @@ use strum_macros::{AsRefStr, EnumIter};
 
 use cvmfs_server_scraper::{
     Hostname, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer, ServerBackendType,
-    ServerType,
+    ServerMetadata, ServerType,
 };
 
 use crate::config::{Condition, ConfigFile};
@@ -139,6 +139,7 @@ pub struct StatusPageData {
     pub repositories_status: RepoStatus,
     pub repositories: Vec<RepoStatus>,
     pub config: ConfigFile,
+    pub servers: Vec<ServerStatus>,
 }
 
 pub trait HasStatusField {
@@ -208,7 +209,7 @@ pub struct Repositories {
     pub status_revision: Status,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Server {
     pub server_type: ServerType,
     pub backend_type: ServerBackendType,
@@ -216,6 +217,7 @@ pub struct Server {
     pub hostname: Hostname,
     pub repositories: Vec<Repositories>,
     pub status: Status,
+    pub metadata: Option<ServerMetadata>,
 }
 
 impl Server {
@@ -223,6 +225,7 @@ impl Server {
         ServerStatus {
             name: self.hostname.clone().to_string(),
             status: self.status,
+            metadata: self.metadata.clone(),
             update_class: self.status.class().to_string(),
             geoapi_class: Status::OK.class().to_string(),
         }
@@ -267,6 +270,7 @@ impl StatusManager {
                         hostname: server.hostname.clone(),
                         repositories,
                         status: overall_status,
+                        metadata: Some(server.metadata.clone()),
                     }
                 }
                 ScrapedServer::Failed(server) => Server {
@@ -276,12 +280,18 @@ impl StatusManager {
                     hostname: server.hostname.clone(),
                     repositories: Vec::new(),
                     status: Status::FAILED,
+                    metadata: None,
                 },
             })
             .collect();
 
         StatusManager { servers }
     }
+
+    pub fn get_server_status_for_all(&self) -> Vec<ServerStatus> {
+        self.servers.iter().map(Server::to_server_status).collect()
+    }
+
     pub fn get_by_type(&self, server_type: ServerType) -> Vec<&Server> {
         self.servers
             .iter()
