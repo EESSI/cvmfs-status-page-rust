@@ -128,6 +128,7 @@ async fn create_status_manager(config_manager: &config::ConfigManager) -> Result
     let scraped_servers = Scraper::new()
         .forced_repositories(repolist)
         .ignored_repositories(ignored_repos)
+        .only_scrape_forced_repositories(config.limit_scraping_to_repositories)
         .with_servers(servers) // Transitions to a WithServer state.
         .validate()? // Transitions to a ValidatedAndReady state, now immutable.
         .scrape()
