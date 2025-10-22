@@ -22,11 +22,17 @@ pub struct ConfigSection {
     pub repo_url_text: String,
 }
 
+fn scrape_only_explicit_repositories() -> bool {
+    false
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFile {
     pub meta: ConfigSection,
     pub servers: Vec<Server>,
     pub repositories: Vec<String>,
+    #[serde(default = "scrape_only_explicit_repositories")]
+    pub limit_scraping_to_repositories: bool,
     pub ignored_repositories: Vec<String>,
     pub rules: Vec<Rule>,
 }
@@ -142,6 +148,7 @@ mod tests {
             repositories: vec![],
             ignored_repositories: vec![],
             rules: vec![],
+            limit_scraping_to_repositories: false,
         };
 
         let manager = ConfigManager {
@@ -178,6 +185,7 @@ mod tests {
             repositories: vec![],
             ignored_repositories: vec![],
             rules: vec![],
+            limit_scraping_to_repositories: false,
         };
 
         let manager = ConfigManager {
