@@ -234,9 +234,9 @@ fn generate_prometheus_metrics(
         ServerType::Stratum1,
         ServerType::SyncServer,
     ] {
-        for s0 in status_manager.get_by_type(ServerType::Stratum0) {
+        for server in status_manager.get_by_type(*servertype) {
             let ts_ms = Some(ts);
-            for repo in s0.repositories.iter() {
+            for repo in server.repositories.iter() {
                 let server_type = match servertype {
                     ServerType::Stratum0 => "stratum0",
                     ServerType::Stratum1 => "stratum1",
@@ -245,7 +245,7 @@ fn generate_prometheus_metrics(
 
                 let repo_labels: [(&str, &str); 3] = [
                     ("type", server_type),
-                    ("server", s0.hostname.to_str()),
+                    ("server", server.hostname.to_str()),
                     ("repository", repo.name.as_str()),
                 ];
 
