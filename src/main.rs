@@ -7,12 +7,14 @@ use std::path::{Path, PathBuf};
 mod config;
 mod dependencies;
 mod models;
+mod prometheus;
 mod templating;
 
 use config::{get_config_manager, init_config};
 use cvmfs_server_scraper::{Scraper, ScraperCommon, ServerType};
 use dependencies::{atomic_write, populate};
 use models::{EESSIStatus, Status, StatusManager, StatusPageData, StratumStatus};
+use prometheus::MetricsBuilder;
 use templating::{render_template_to_file, RepoStatus, StatusInfo};
 
 #[derive(Parser, Debug)]
@@ -91,7 +93,7 @@ async fn main() -> Result<()> {
     render_output(&args, &status_page_data)?;
 
     if args.prometheus_metrics {
-        generate_prometheus_metrics(&args, &status_page_data, &run_start_time)?;
+        generate_prometheus_metrics(&args, &status_page_data, &status_manager, &run_start_time)?;
     }
 
     Ok(())
@@ -180,33 +182,122 @@ fn generate_status_page_data(
 fn generate_prometheus_metrics(
     args: &Opt,
     status_page_data: &StatusPageData,
+    status_manager: &StatusManager,
     timestamp: &DateTime<Utc>,
 ) -> Result<()> {
     use crate::models::StatusLevel;
+
     let filename = args.destination.join("metrics");
     trace!("Generating Prometheus metrics file: {:?}", filename);
 
-    let ms_since_epoch = timestamp.timestamp_millis();
+    let ts = timestamp.timestamp_millis();
 
-    let metrics = format!(
-        "# HELP eessi_status EESSI status\n# TYPE eessi_status gauge\n\
-        eessi_status {} {ms_since_epoch}\n\
-        # HELP stratum0_status Stratum0 status\n# TYPE stratum0_status gauge\n\
-        stratum0_status {} {ms_since_epoch}\n\
-        # HELP stratum1_status Stratum1 status\n# TYPE stratum1_status gauge\n\
-        stratum1_status {} {ms_since_epoch}\n\
-        # HELP syncservers_status SyncServers status\n# TYPE syncservers_status gauge\n\
-        syncservers_status {} {ms_since_epoch}\n\
-        # HELP repositories_status Repositories status\n# TYPE repositories_status gauge\n\
-        repositories_status {} {ms_since_epoch}\n",
-        status_page_data.eessi_status.level(),
-        status_page_data.stratum0.level(),
-        status_page_data.stratum1.level(),
-        status_page_data.syncservers.level(),
-        status_page_data.repositories_status.level()
+    let mut b = MetricsBuilder::new();
+    b.add_gauge(
+        "eessi_status",
+        "EESSI status",
+        status_page_data.eessi_status.level() as f64,
+        &[],
+        Some(ts),
+    )
+    .add_gauge(
+        "stratum0_status",
+        "Stratum0 status",
+        status_page_data.stratum0.level() as f64,
+        &[],
+        Some(ts),
+    )
+    .add_gauge(
+        "stratum1_status",
+        "Stratum1 status",
+        status_page_data.stratum1.level() as f64,
+        &[],
+        Some(ts),
+    )
+    .add_gauge(
+        "syncservers_status",
+        "SyncServers status",
+        status_page_data.syncservers.level() as f64,
+        &[],
+        Some(ts),
+    )
+    .add_gauge(
+        "repositories_status",
+        "Repositories status",
+        status_page_data.repositories_status.level() as f64,
+        &[],
+        Some(ts),
     );
 
-    atomic_write(&filename, metrics.as_bytes())?;
+    for servertype in &[
+        ServerType::Stratum0,
+        ServerType::Stratum1,
+        ServerType::SyncServer,
+    ] {
+        for s0 in status_manager.get_by_type(ServerType::Stratum0) {
+            let ts_ms = Some(ts);
+            for repo in s0.repositories.iter() {
+                let server_type = match servertype {
+                    ServerType::Stratum0 => "stratum0",
+                    ServerType::Stratum1 => "stratum1",
+                    ServerType::SyncServer => "syncserver",
+                };
+
+                let repo_labels: [(&str, &str); 3] = [
+                    ("type", server_type),
+                    ("server", s0.hostname.to_str()),
+                    ("repository", repo.name.as_str()),
+                ];
+
+                // The fields are:
+                // - c: Cryptographic hash of the repository’s current root catalog
+                // - b: Size of the root file catalog in bytes
+                // - a: true if the catalog should be fetched under its alternative name
+                // - r: MD5 hash of the repository’s current root path (usually always d41d8cd98f00b204e9800998ecf8427e)
+                // - x: Cryptographic hash of the signing certificate
+                // - g: true if the repository is garbage-collectable
+                // - h: Cryptographic hash of the repository’s named tag history database
+                // - t: Unix timestamp of this particular revision
+                // - d: Time To Live (TTL) of the root catalog
+                // - s: Revision number of this published revision
+                // - n: The full name of the manifested repository
+                // - m: Cryptographic hash of the repository JSON metadata
+                // - y: Cryptographic hash of the reflog checksum
+                // - l: currently unused (reserved for micro catalogs)
+                b.add_gauge(
+                    "repo_revision",
+                    "Repository revision",
+                    repo.revision as f64,
+                    &repo_labels,
+                    ts_ms,
+                )
+                .add_gauge(
+                    "repo_timestamp",
+                    "Repository timestamp",
+                    repo.manifest.t as f64,
+                    &repo_labels,
+                    ts_ms,
+                )
+                .add_gauge(
+                    "repo_ttl",
+                    "Repository TTL",
+                    repo.manifest.d as f64,
+                    &repo_labels,
+                    ts_ms,
+                )
+                .add_gauge(
+                    "repo_catalogue_size",
+                    "Repository catalogue size",
+                    repo.manifest.b as f64,
+                    &repo_labels,
+                    ts_ms,
+                );
+            }
+        }
+    }
+
+    let text = b.build();
+    atomic_write(&filename, text.as_bytes())?;
     info!("Prometheus metrics file written to: {:?}", filename);
     Ok(())
 }

@@ -8,8 +8,8 @@ use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter};
 
 use cvmfs_server_scraper::{
-    Hostname, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer, ServerBackendType,
-    ServerMetadata, ServerType,
+    Hostname, Manifest, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer,
+    ServerBackendType, ServerMetadata, ServerType,
 };
 
 use crate::config::{Condition, ConfigFile};
@@ -204,6 +204,7 @@ impl StatusLevel for RepoStatus {}
 pub struct Repositories {
     pub name: String,
     pub revision: i32,
+    pub manifest: Manifest,
     pub status: Status,
     /// Is the revision in sync with either the stratum0 or the stratum1s?
     pub status_revision: Status,
@@ -251,6 +252,7 @@ impl StatusManager {
                             Repositories {
                                 name: repo.name.clone(),
                                 revision: repo.revision(),
+                                manifest: repo.manifest.clone(),
                                 status: status_revision,
                                 status_revision,
                             }
