@@ -229,6 +229,27 @@ fn generate_prometheus_metrics(
         Some(ts),
     );
 
+    let maps = vec![
+        ("overall", status_page_data.eessi_status.level() as f64),
+        ("stratum0", status_page_data.stratum0.level() as f64),
+        ("stratum1", status_page_data.stratum1.level() as f64),
+        ("syncservers", status_page_data.syncservers.level() as f64),
+        (
+            "repositories",
+            status_page_data.repositories_status.level() as f64,
+        ),
+    ];
+
+    for (category, level) in maps {
+        b.add_gauge(
+            "status_overview",
+            "Status overview",
+            level,
+            &[("category", category)],
+            Some(ts),
+        );
+    }
+
     for servertype in &[
         ServerType::Stratum0,
         ServerType::Stratum1,
