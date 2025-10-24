@@ -8,8 +8,8 @@ use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter};
 
 use cvmfs_server_scraper::{
-    Hostname, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer, ServerBackendType,
-    ServerMetadata, ServerType,
+    Hostname, Manifest, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer,
+    ServerBackendType, ServerMetadata, ServerType,
 };
 
 use crate::config::{Condition, ConfigFile};
@@ -204,6 +204,7 @@ impl StatusLevel for RepoStatus {}
 pub struct Repositories {
     pub name: String,
     pub revision: i32,
+    pub manifest: Manifest,
     pub status: Status,
     /// Is the revision in sync with either the stratum0 or the stratum1s?
     pub status_revision: Status,
@@ -232,6 +233,20 @@ impl Server {
     }
 }
 
+pub trait ToEESSILabel {
+    fn to_label(&self) -> &str;
+}
+
+impl ToEESSILabel for ServerType {
+    fn to_label(&self) -> &str {
+        match self {
+            ServerType::Stratum0 => "stratum0",
+            ServerType::Stratum1 => "stratum1",
+            ServerType::SyncServer => "syncserver",
+        }
+    }
+}
+
 pub struct StatusManager {
     pub servers: Vec<Server>,
 }
@@ -251,6 +266,7 @@ impl StatusManager {
                             Repositories {
                                 name: repo.name.clone(),
                                 revision: repo.revision(),
+                                manifest: repo.manifest.clone(),
                                 status: status_revision,
                                 status_revision,
                             }
@@ -290,6 +306,10 @@ impl StatusManager {
 
     pub fn get_server_status_for_all(&self) -> Vec<ServerStatus> {
         self.servers.iter().map(Server::to_server_status).collect()
+    }
+
+    pub fn get_all_servers(&self) -> Vec<&Server> {
+        self.servers.iter().collect()
     }
 
     pub fn get_by_type(&self, server_type: ServerType) -> Vec<&Server> {

@@ -23,6 +23,8 @@ This repository contains the source code for an EESSI status page generator. The
 
 Create a configuration file (e.g., config.json). See [config.json](config.json) for an example. The only optional key is `backend_type` for servers. It defaults to `AutoDetect` if missing. See the section on server backend types for more information.
 
+Note that `limit_scraping_to_repositories` controls how the scraper determines which repositories to scrape from each server. If set to `true`, only the repositories explicitly listed as `repositories` in the configuration will be scraped (and `ignored_repositories` will have no meaning). If set to `false`, the scraper will also consider repositories detected from the server itself (if applicable), filtered by `ignored_repositores`. The default is `false`.
+
 ## Usage
 
 Run the binary with the desired options:
@@ -136,8 +138,17 @@ In this example, as the rules are applied in order, the engine will check, in or
 ## Prometheus Metrics
 
 Prometheus metrics can be enabled with the `--prometheus-metrics` option. The metrics are exposed as the file `metrics` in the
-output directory and are generated with the timestamp being the start of the application. A typical metrics file will look
-like this:
+output directory and are generated with the timestamp being the start of the application.
+
+The status codes used in the metrics are as follows:
+
+- `0`: OK
+- `1`: Degraded
+- `2`: Warning
+- `3`: Failed
+- `9`: Maintenance
+
+A typical metrics file might look like this:
 
 ```prometheus
 # HELP eessi_status EESSI status
@@ -155,12 +166,80 @@ syncservers_status 0 1720525887957
 # HELP repositories_status Repositories status
 # TYPE repositories_status gauge
 repositories_status 0 1720525887957
+# HELP status_overview Status overview
+# TYPE status_overview gauge
+status_overview{category="overall"} 0 1761206997670
+status_overview{category="stratum0"} 0 1761206997670
+status_overview{category="stratum1"} 0 1761206997670
+status_overview{category="syncservers"} 0 1761206997670
+status_overview{category="repositories"} 0 1761206997670
+# HELP repo_catalogue_size Repository catalogue size
+# TYPE repo_catalogue_size gauge
+repo_catalogue_size{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
+repo_catalogue_size{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
+repo_catalogue_size{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 133120 1761206997670
+repo_catalogue_size{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
+repo_catalogue_size{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
+repo_catalogue_size{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 133120 1761206997670
+repo_catalogue_size{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
+repo_catalogue_size{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
+repo_catalogue_size{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 133120 1761206997670
+repo_catalogue_size{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 9526272 1761206997670
+repo_catalogue_size{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 26624 1761206997670
+repo_catalogue_size{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 133120 1761206997670
+repo_catalogue_size{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
+repo_catalogue_size{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
+repo_catalogue_size{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 133120 1761206997670
+# HELP repo_revision Repository revision
+# TYPE repo_revision gauge
+repo_revision{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 415 1761206997670
+repo_revision{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
+repo_revision{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 9744 1761206997670
+repo_revision{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 415 1761206997670
+repo_revision{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
+repo_revision{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 9744 1761206997670
+repo_revision{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 415 1761206997670
+repo_revision{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
+repo_revision{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 9744 1761206997670
+repo_revision{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 415 1761206997670
+repo_revision{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 522 1761206997670
+repo_revision{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 9744 1761206997670
+repo_revision{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 415 1761206997670
+repo_revision{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
+repo_revision{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 9744 1761206997670
+# HELP repo_timestamp Repository timestamp
+# TYPE repo_timestamp gauge
+repo_timestamp{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
+repo_timestamp{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
+repo_timestamp{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
+repo_timestamp{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
+repo_timestamp{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
+repo_timestamp{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
+repo_timestamp{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
+repo_timestamp{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
+repo_timestamp{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
+repo_timestamp{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 1760706941 1761206997670
+repo_timestamp{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 1750670430 1761206997670
+repo_timestamp{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 1761150935 1761206997670
+repo_timestamp{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
+repo_timestamp{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
+repo_timestamp{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
+# HELP repo_ttl Repository TTL
+# TYPE repo_ttl gauge
+repo_ttl{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 240 1761206997670
+repo_ttl{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 240 1761206997670
+repo_ttl{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 240 1761206997670
+repo_ttl{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
+repo_ttl{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 240 1761206997670
+
 ```
-
-The status codes are:
-
-- `0`: OK
-- `1`: Degraded
-- `2`: Warning
-- `3`: Failed
-- `9`: Maintenance

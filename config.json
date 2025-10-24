@@ -32,6 +32,7 @@
         "dev.eessi.io",
         "riscv.eessi.io"
     ],
+    "limit_scraping_to_repositories": false,
     "ignored_repositories": [
         "test.eessi.io"
     ],
