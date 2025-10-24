@@ -13,7 +13,7 @@ mod templating;
 use config::{get_config_manager, init_config};
 use cvmfs_server_scraper::{Scraper, ScraperCommon, ServerType};
 use dependencies::{atomic_write, populate};
-use models::{EESSIStatus, Status, StatusManager, StatusPageData, StratumStatus};
+use models::{EESSIStatus, Status, StatusManager, StatusPageData, StratumStatus, ToEESSILabel};
 use prometheus::MetricsBuilder;
 use templating::{render_template_to_file, RepoStatus, StatusInfo};
 
@@ -250,70 +250,59 @@ fn generate_prometheus_metrics(
         );
     }
 
-    for servertype in &[
-        ServerType::Stratum0,
-        ServerType::Stratum1,
-        ServerType::SyncServer,
-    ] {
-        for server in status_manager.get_by_type(*servertype) {
-            let ts_ms = Some(ts);
-            for repo in server.repositories.iter() {
-                let server_type = match servertype {
-                    ServerType::Stratum0 => "stratum0",
-                    ServerType::Stratum1 => "stratum1",
-                    ServerType::SyncServer => "syncserver",
-                };
+    for server in status_manager.get_all_servers() {
+        let ts_ms = Some(ts);
 
-                let repo_labels: [(&str, &str); 3] = [
-                    ("type", server_type),
-                    ("server", server.hostname.to_str()),
-                    ("repository", repo.name.as_str()),
-                ];
+        for repo in server.repositories.iter() {
+            let repo_labels: [(&str, &str); 3] = [
+                ("type", server.server_type.to_label()),
+                ("server", server.hostname.to_str()),
+                ("repository", repo.name.as_str()),
+            ];
 
-                // The fields are:
-                // - c: Cryptographic hash of the repository’s current root catalog
-                // - b: Size of the root file catalog in bytes
-                // - a: true if the catalog should be fetched under its alternative name
-                // - r: MD5 hash of the repository’s current root path (usually always d41d8cd98f00b204e9800998ecf8427e)
-                // - x: Cryptographic hash of the signing certificate
-                // - g: true if the repository is garbage-collectable
-                // - h: Cryptographic hash of the repository’s named tag history database
-                // - t: Unix timestamp of this particular revision
-                // - d: Time To Live (TTL) of the root catalog
-                // - s: Revision number of this published revision
-                // - n: The full name of the manifested repository
-                // - m: Cryptographic hash of the repository JSON metadata
-                // - y: Cryptographic hash of the reflog checksum
-                // - l: currently unused (reserved for micro catalogs)
-                b.add_gauge(
-                    "repo_revision",
-                    "Repository revision",
-                    repo.revision as f64,
-                    &repo_labels,
-                    ts_ms,
-                )
-                .add_gauge(
-                    "repo_timestamp",
-                    "Repository timestamp",
-                    repo.manifest.t as f64,
-                    &repo_labels,
-                    ts_ms,
-                )
-                .add_gauge(
-                    "repo_ttl",
-                    "Repository TTL",
-                    repo.manifest.d as f64,
-                    &repo_labels,
-                    ts_ms,
-                )
-                .add_gauge(
-                    "repo_catalogue_size",
-                    "Repository catalogue size",
-                    repo.manifest.b as f64,
-                    &repo_labels,
-                    ts_ms,
-                );
-            }
+            // The fields are:
+            // - c: Cryptographic hash of the repository’s current root catalog
+            // - b: Size of the root file catalog in bytes
+            // - a: true if the catalog should be fetched under its alternative name
+            // - r: MD5 hash of the repository’s current root path (usually always d41d8cd98f00b204e9800998ecf8427e)
+            // - x: Cryptographic hash of the signing certificate
+            // - g: true if the repository is garbage-collectable
+            // - h: Cryptographic hash of the repository’s named tag history database
+            // - t: Unix timestamp of this particular revision
+            // - d: Time To Live (TTL) of the root catalog
+            // - s: Revision number of this published revision
+            // - n: The full name of the manifested repository
+            // - m: Cryptographic hash of the repository JSON metadata
+            // - y: Cryptographic hash of the reflog checksum
+            // - l: currently unused (reserved for micro catalogs)
+            b.add_gauge(
+                "repo_revision",
+                "Repository revision",
+                repo.revision as f64,
+                &repo_labels,
+                ts_ms,
+            )
+            .add_gauge(
+                "repo_timestamp",
+                "Repository timestamp",
+                repo.manifest.t as f64,
+                &repo_labels,
+                ts_ms,
+            )
+            .add_gauge(
+                "repo_ttl",
+                "Repository TTL",
+                repo.manifest.d as f64,
+                &repo_labels,
+                ts_ms,
+            )
+            .add_gauge(
+                "repo_catalogue_size",
+                "Repository catalogue size",
+                repo.manifest.b as f64,
+                &repo_labels,
+                ts_ms,
+            );
         }
     }
 

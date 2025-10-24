@@ -233,6 +233,20 @@ impl Server {
     }
 }
 
+pub trait ToEESSILabel {
+    fn to_label(&self) -> &str;
+}
+
+impl ToEESSILabel for ServerType {
+    fn to_label(&self) -> &str {
+        match self {
+            ServerType::Stratum0 => "stratum0",
+            ServerType::Stratum1 => "stratum1",
+            ServerType::SyncServer => "syncserver",
+        }
+    }
+}
+
 pub struct StatusManager {
     pub servers: Vec<Server>,
 }
@@ -292,6 +306,10 @@ impl StatusManager {
 
     pub fn get_server_status_for_all(&self) -> Vec<ServerStatus> {
         self.servers.iter().map(Server::to_server_status).collect()
+    }
+
+    pub fn get_all_servers(&self) -> Vec<&Server> {
+        self.servers.iter().collect()
     }
 
     pub fn get_by_type(&self, server_type: ServerType) -> Vec<&Server> {
