@@ -16,7 +16,7 @@ This repository contains the source code for an EESSI status page generator. The
 
 - Install [Rust](https://www.rust-lang.org/tools/install)
 - `mkdir /tmp/build-dir && cd /tmp/build-dir`
-- `git clone https://github.com/terjekv/cvmfs-status-page-rust`
+- `git clone https://github.com/EESSI/cvmfs-status-page-rust`
 - `cd cvmfs-status-page-rust && cargo build --release`
 
 ## Configuration
