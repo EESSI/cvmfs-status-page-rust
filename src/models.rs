@@ -478,6 +478,37 @@ impl StatusManager {
         let mut scope = Scope::new();
         let engine = Engine::new();
 
+        for server_type in vec![
+            ServerType::Stratum0,
+            ServerType::Stratum1,
+            ServerType::SyncServer,
+        ] {
+            let mut total = 0;
+
+            for status in Status::iter() {
+                let count = self
+                    .get_by_status(status)
+                    .iter()
+                    .filter(|s| s.server_type == server_type)
+                    .count() as i64;
+                let key = format!(
+                    "{}_{}",
+                    server_type.to_label(),
+                    status.as_ref().to_lowercase()
+                );
+                total += count;
+                println!("Adding to scope: {} = {}", key, count);
+                scope.push(&key, count);
+            }
+
+            scope.push(&format!("{}_total", server_type.to_label()), total);
+            println!(
+                "Adding to scope: {} = {}",
+                format!("{}_total", server_type.to_label()),
+                total
+            );
+        }
+
         scope.push(
             "stratum0_servers",
             self.get_by_type_ok(ServerType::Stratum0).len() as i64,
@@ -493,6 +524,11 @@ impl StatusManager {
             self.get_by_type_ok(ServerType::SyncServer).len() as i64,
         );
 
+        scope.push(
+            "repos_total",
+            self.get_status_per_unique_repo().len() as i64,
+        );
+
         let not_ok_repos = self
             .get_status_per_unique_repo()
             .iter()
@@ -503,6 +539,7 @@ impl StatusManager {
 
         for condition in conditions {
             debug!("Evaluating condition: {:?}", condition);
+
             if evaluate_condition(&condition, &mut scope, &engine) {
                 return condition.status;
             }
@@ -555,9 +592,13 @@ fn compare_with_stratum0(
 }
 
 fn evaluate_condition(condition: &Condition, scope: &mut Scope, engine: &Engine) -> bool {
-    engine
-        .eval_expression_with_scope::<bool>(scope, &condition.when)
-        .unwrap_or(false)
+    match engine.eval_expression_with_scope::<bool>(scope, &condition.when) {
+        Ok(result) => result,
+        Err(e) => {
+            debug!("Failed to evaluate condition '{}': {}", condition.when, e);
+            false
+        }
+    }
 }
 
 fn evaluate_conditions_with_key_value(
@@ -580,4 +621,161 @@ fn evaluate_conditions_with_key_value(
         })
         .find(|&condition| evaluate_condition(condition, &mut scope, &engine))
         .map_or(Status::FAILED, |condition| condition.status)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+    use yare::parameterized;
+
+    use cvmfs_server_scraper::Hostname;
+
+    fn create_status_manager() -> StatusManager {
+        let servers = vec![
+            Server {
+                server_type: ServerType::Stratum0,
+                backend_type: ServerBackendType::CVMFS,
+                backend_detected: Some(ServerBackendType::CVMFS),
+                hostname: Hostname::from_str("stratum0.example.com").unwrap(),
+                repositories: vec![],
+                status: Status::OK,
+                metadata: None,
+            },
+            Server {
+                server_type: ServerType::Stratum1,
+                backend_type: ServerBackendType::AutoDetect,
+                backend_detected: Some(ServerBackendType::CVMFS),
+                hostname: Hostname::from_str("stratum1-auto-cvmfs-degraded.example.com").unwrap(),
+                repositories: vec![],
+                status: Status::DEGRADED,
+                metadata: None,
+            },
+            Server {
+                server_type: ServerType::Stratum1,
+                backend_type: ServerBackendType::CVMFS,
+                backend_detected: Some(ServerBackendType::CVMFS),
+                hostname: Hostname::from_str("stratum1-cvmfs-cvmfs-ok.example.com").unwrap(),
+                repositories: vec![],
+                status: Status::OK,
+                metadata: None,
+            },
+            Server {
+                server_type: ServerType::SyncServer,
+                backend_type: ServerBackendType::CVMFS,
+                backend_detected: Some(ServerBackendType::CVMFS),
+                hostname: Hostname::from_str("syncserver.example.com").unwrap(),
+                repositories: vec![],
+                status: Status::OK,
+                metadata: None,
+            },
+        ];
+
+        StatusManager { servers }
+    }
+
+    fn create_conditions_overall_legacy() -> Vec<Condition> {
+        vec![
+            Condition {
+                when: "stratum0_servers >= 1 && stratum1_servers >= 2".to_string(),
+                status: Status::OK,
+            },
+            Condition {
+                when: "stratum0_servers >= 1 && stratum1_servers >= 1".to_string(),
+                status: Status::DEGRADED,
+            },
+            Condition {
+                when: "stratum0_servers >= 1".to_string(),
+                status: Status::WARNING,
+            },
+        ]
+    }
+
+    fn create_conditions_overall_new() -> Vec<Condition> {
+        vec![
+            Condition {
+                when: "stratum0_ok >= 1 && stratum1_ok >= 2".to_string(),
+                status: Status::OK,
+            },
+            Condition {
+                when: "stratum0_ok >= 1 && stratum1_ok >= 1".to_string(),
+                status: Status::DEGRADED,
+            },
+            Condition {
+                when: "stratum0_ok >= 1".to_string(),
+                status: Status::WARNING,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_status_ordering() {
+        assert!(Status::OK < Status::DEGRADED);
+        assert!(Status::DEGRADED < Status::WARNING);
+        assert!(Status::WARNING < Status::FAILED);
+        assert!(Status::FAILED < Status::MAINTENANCE);
+    }
+
+    #[test]
+    fn test_conditions_overall_legacy() {
+        let status_manager = create_status_manager();
+        let conditions = create_conditions_overall_legacy();
+        let overall_status = status_manager.evaluate_overall_conditions(conditions);
+        assert_eq!(overall_status, Status::DEGRADED);
+    }
+
+    #[test]
+    fn test_conditions_overall_new() {
+        let status_manager = create_status_manager();
+        let conditions = create_conditions_overall_new();
+        let overall_status = status_manager.evaluate_overall_conditions(conditions);
+        assert_eq!(overall_status, Status::DEGRADED);
+    }
+
+    #[test]
+    fn test_conditions_invalid_key_is_ignored() {
+        let status_manager = create_status_manager();
+        let conditions = vec![
+            Condition {
+                when: "invalid_key >= 1".to_string(),
+                status: Status::OK,
+            },
+            Condition {
+                when: "stratum0_ok <= 1".to_string(),
+                status: Status::DEGRADED,
+            },
+        ];
+        let overall_status = status_manager.evaluate_overall_conditions(conditions);
+        assert_eq!(overall_status, Status::DEGRADED);
+    }
+
+    #[parameterized(
+        stratum0 = { "stratum0", 1 },
+        stratum1 = { "stratum1", 2 },
+        syncserver = { "syncserver", 1 }
+
+    )]
+    fn test_conditions_totals_equals_all_others(server_type: &str, count: usize) {
+        let status_manager = create_status_manager();
+
+        let when = format!(
+            "{server_type}_ok + {server_type}_degraded + {server_type}_warning + {server_type}_failed == {server_type}_total",
+        );
+
+        let conditions = vec![Condition {
+            when,
+            status: Status::OK,
+        }];
+        let overall_status = status_manager.evaluate_overall_conditions(conditions);
+        assert_eq!(overall_status, Status::OK);
+
+        let when = format!("{count} == {server_type}_total",);
+        let conditions = vec![Condition {
+            when,
+            status: Status::OK,
+        }];
+        let overall_status = status_manager.evaluate_overall_conditions(conditions);
+        assert_eq!(overall_status, Status::OK);
+    }
 }

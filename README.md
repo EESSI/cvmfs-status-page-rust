@@ -84,10 +84,38 @@ Each of these status conditions can have any number of rules associated with the
 
 Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evaluated in order. The first matching rule will set the given status for the case in question. Valid variables for the conditions are:
 
-- `stratum0_servers`: The number of stratum0 servers successfully scraped
-- `stratum1_servers`: The number of stratum1 servers successfully scraped
-- `sync_servers`: The number of sync servers successfully scraped
-- `repos_out_of_sync`: The number of repositories out of sync across all servers scraped
+### Repository related
+
+- `repos_out_of_sync`: The number of unique repositories out of sync across all servers scraped
+- `repos_total`: The total number of unique repositories scraped across all servers
+
+### Server counts, legacy variables
+
+- `stratum0_servers`: The number of stratum0 servers successfully scraped with a state of OK
+- `stratum1_servers`: The number of stratum1 servers successfully scraped with a state of OK
+- `sync_servers`: The number of sync servers successfully scraped with a state of OK
+
+### Server counts, detailed variables
+
+- `stratum0_ok`: The number of stratum0 servers with status OK
+- `stratum0_degraded`: The number of stratum0 servers with status DEGRADED
+- `stratum0_warning`: The number of stratum0 servers with status WARNING
+- `stratum0_failed`: The number of stratum0 servers with status FAILED
+- `stratum0_total`: The total number of stratum0 servers scraped (should equal stratum0_ok + stratum0_degraded + stratum0_warning + stratum0_failed)
+
+- `stratum1_ok`: The number of stratum1 servers with status OK
+- `stratum1_degraded`: The number of stratum1 servers with status DEGRADED
+- `stratum1_warning`: The number of stratum1 servers with status WARNING
+- `stratum1_failed`: The number of stratum1 servers with status FAILED
+- `stratum1_total`: The total number of stratum1 servers scraped (should equal stratum1_ok + stratum1_degraded + stratum1_warning + stratum1_failed)
+
+- `syncserver_ok`: The number of sync servers with status OK
+- `syncserver_degraded`: The number of sync servers with status DEGRADED
+- `syncserver_warning`: The number of sync servers with status WARNING
+- `syncserver_failed`: The number of sync servers with status FAILED
+- `syncserver_total`: The total number of sync servers scraped (should equal syncserver_ok + syncserver_degraded + syncserver_warning + syncserver_failed)
+
+Note: It's `syncserver` (no underscore and singular, like stratum0/1).
 
 ### Example of rules
 
