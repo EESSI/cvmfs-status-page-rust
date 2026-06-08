@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 mod config;
 mod dependencies;
+mod grafana;
 mod models;
 mod prometheus;
 mod templating;
@@ -90,7 +91,7 @@ async fn main() -> Result<()> {
     let status_manager = create_status_manager(config_manager).await?;
     let status_page_data = generate_status_page_data(config_manager, &status_manager)?;
 
-    render_output(&args, &status_page_data)?;
+    render_output(&args, &status_page_data).await?;
 
     if args.prometheus_metrics {
         generate_prometheus_metrics(&args, &status_page_data, &status_manager, &run_start_time)?;
@@ -362,9 +363,30 @@ fn create_repo_status() -> RepoStatus {
     }
 }
 
-fn render_output(args: &Opt, status_page_data: &StatusPageData) -> Result<()> {
+async fn render_output(args: &Opt, status_page_data: &StatusPageData) -> Result<()> {
     let mut context = tera::Context::new();
     context.insert("data", status_page_data);
+
+    if let Some(graf_cfg) = &status_page_data.config.grafana {
+        let storage_data = grafana::fetch_storage_usage(&grafana::GrafanaConfig {
+            url: graf_cfg.url.clone(),
+            token: graf_cfg.token.clone(),
+            datasource_uid: graf_cfg.datasource_uid.clone(),
+            weeks: graf_cfg.storage_query_weeks,
+        }).await.unwrap_or_else(|e| {
+            log::warn!("Failed to fetch Grafana storage data: {e}");
+            vec![]
+        });
+
+        // Serialize to JSON for the template
+        let labels: Vec<&str> = storage_data.iter().map(|(d, _)| d.as_str()).collect();
+        let values: Vec<f64> = storage_data.iter().map(|(_, v)| *v).collect();
+        context.insert("storage_labels", &labels);
+        context.insert("storage_values", &values);
+        context.insert("show_storage_chart", &true);
+    } else {
+        context.insert("show_storage_chart", &false);
+    }
 
     let destination = args
         .destination
