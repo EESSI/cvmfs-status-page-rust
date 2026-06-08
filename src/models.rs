@@ -108,10 +108,7 @@ impl Status {
     ) -> Self {
         let good_servers: Vec<&PopulatedServer> = scraped_servers
             .iter()
-            .filter_map(|s| match s {
-                ScrapedServer::Populated(server) => Some(server),
-                ScrapedServer::Failed(_) => None,
-            })
+            .filter_map(ScrapedServer::as_populated_server)
             .collect();
 
         let stratum0 = good_servers
