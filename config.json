@@ -1,4 +1,10 @@
 {
+    "grafana": {
+        "url": "https://grafana-url",
+        "token": "secrettoken",
+        "datasource_uid": "datasource_uid",
+        "storage_query_weeks": 52
+    },
     "meta": {
         "title": "EESSI status!",
         "logging_level": "WARN",
