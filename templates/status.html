@@ -136,7 +136,41 @@
                 </div>
             </div>
         </div>
+{% if show_storage_chart %}
+<section class="storage-chart">
+  <h2>Stratum 1 Disk Usage (currently: {{ storage_values | last | int }} GiB)</h2>
+  <canvas id="storageChart" height="100"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    new Chart(document.getElementById('storageChart'), {
+      type: 'line',
+      data: {
+        labels: {{ storage_labels | json_encode | safe }},
+        datasets: [{
+          label: 'Used disk space on /srv (GiB)',
+          data: {{ storage_values | json_encode | safe }},
+          borderColor: '#4e79a7',
+          backgroundColor: 'rgba(78,121,167,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { ticks: { maxTicksLimit: 12 } },
+          y: { title: { display: true, text: 'GiB' } }
+        }
+      }
+    });
+  </script>
+</section>
+{% endif %}
+
     </div>
+
+
 
     <div class="footer">Last updated {{ data.last_update }} | {{ data.contact_email }}</div>
 
