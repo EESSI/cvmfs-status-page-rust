@@ -101,19 +101,22 @@ Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evalua
 - `stratum0_degraded`: The number of stratum0 servers with status DEGRADED
 - `stratum0_warning`: The number of stratum0 servers with status WARNING
 - `stratum0_failed`: The number of stratum0 servers with status FAILED
-- `stratum0_total`: The total number of stratum0 servers scraped (should equal stratum0_ok + stratum0_degraded + stratum0_warning + stratum0_failed)
+- `stratum0_maintenance`: The number of stratum0 servers with status MAINTENANCE
+- `stratum0_total`: The total number of stratum0 servers scraped (should equal stratum0_ok + stratum0_degraded + stratum0_warning + stratum0_failed + stratum0_maintenance)
 
 - `stratum1_ok`: The number of stratum1 servers with status OK (legacy: `stratum1_servers`)
 - `stratum1_degraded`: The number of stratum1 servers with status DEGRADED
 - `stratum1_warning`: The number of stratum1 servers with status WARNING
 - `stratum1_failed`: The number of stratum1 servers with status FAILED
-- `stratum1_total`: The total number of stratum1 servers scraped (should equal stratum1_ok + stratum1_degraded + stratum1_warning + stratum1_failed)
+- `stratum1_maintenance`: The number of stratum1 servers with status MAINTENANCE
+- `stratum1_total`: The total number of stratum1 servers scraped (should equal stratum1_ok + stratum1_degraded + stratum1_warning + stratum1_failed + stratum1_maintenance)
 
 - `syncserver_ok`: The number of sync servers with status OK (legacy: `sync_servers`)
 - `syncserver_degraded`: The number of sync servers with status DEGRADED
 - `syncserver_warning`: The number of sync servers with status WARNING
 - `syncserver_failed`: The number of sync servers with status FAILED
-- `syncserver_total`: The total number of sync servers scraped (should equal syncserver_ok + syncserver_degraded + syncserver_warning + syncserver_failed)
+- `syncserver_maintenance`: The number of sync servers with status MAINTENANCE
+- `syncserver_total`: The total number of sync servers scraped (should equal syncserver_ok + syncserver_degraded + syncserver_warning + syncserver_failed + syncserver_maintenance)
 
 Note: It's `syncserver` (no underscore and singular, like stratum0/1).
 

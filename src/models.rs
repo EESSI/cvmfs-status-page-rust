@@ -478,7 +478,7 @@ impl StatusManager {
         let mut scope = Scope::new();
         let engine = Engine::new();
 
-        for server_type in vec![
+        for server_type in [
             ServerType::Stratum0,
             ServerType::Stratum1,
             ServerType::SyncServer,
@@ -497,16 +497,10 @@ impl StatusManager {
                     status.as_ref().to_lowercase()
                 );
                 total += count;
-                println!("Adding to scope: {} = {}", key, count);
                 scope.push(&key, count);
             }
 
-            scope.push(&format!("{}_total", server_type.to_label()), total);
-            println!(
-                "Adding to scope: {} = {}",
-                format!("{}_total", server_type.to_label()),
-                total
-            );
+            scope.push(format!("{}_total", server_type.to_label()), total);
         }
 
         scope.push(
@@ -644,6 +638,15 @@ mod tests {
                 metadata: None,
             },
             Server {
+                server_type: ServerType::Stratum0,
+                backend_type: ServerBackendType::CVMFS,
+                backend_detected: Some(ServerBackendType::CVMFS),
+                hostname: Hostname::from_str("stratum0-maintenance.example.com").unwrap(),
+                repositories: vec![],
+                status: Status::MAINTENANCE,
+                metadata: None,
+            },
+            Server {
                 server_type: ServerType::Stratum1,
                 backend_type: ServerBackendType::AutoDetect,
                 backend_detected: Some(ServerBackendType::CVMFS),
@@ -751,7 +754,7 @@ mod tests {
     }
 
     #[parameterized(
-        stratum0 = { "stratum0", 1 },
+        stratum0 = { "stratum0", 2 },
         stratum1 = { "stratum1", 2 },
         syncserver = { "syncserver", 1 }
 
@@ -760,7 +763,7 @@ mod tests {
         let status_manager = create_status_manager();
 
         let when = format!(
-            "{server_type}_ok + {server_type}_degraded + {server_type}_warning + {server_type}_failed == {server_type}_total",
+            "{server_type}_ok + {server_type}_degraded + {server_type}_warning + {server_type}_failed + {server_type}_maintenance == {server_type}_total",
         );
 
         let conditions = vec![Condition {

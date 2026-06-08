@@ -114,8 +114,8 @@ async fn create_status_manager(config_manager: &config::ConfigManager) -> Result
 
     for server in &config.servers {
         let hostname = server.hostname.clone();
-        let backend = server.backend_type.clone();
-        let server_type = server.server_type.clone();
+        let backend = server.backend_type;
+        let server_type = server.server_type;
         servers.push(cvmfs_server_scraper::Server::new(
             server_type,
             backend,
