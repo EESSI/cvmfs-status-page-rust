@@ -28,6 +28,7 @@ fn scrape_only_explicit_repositories() -> bool {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFile {
+    pub grafana: Option<GrafanaConfigJson>,
     pub meta: ConfigSection,
     pub servers: Vec<Server>,
     pub repositories: Vec<String>,
@@ -36,6 +37,15 @@ pub struct ConfigFile {
     pub ignored_repositories: Vec<String>,
     pub rules: Vec<Rule>,
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GrafanaConfigJson {
+    pub url: String,
+    pub token: String,
+    pub datasource_uid: String,
+    pub storage_query_weeks: u32,
+}
+
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Rule {
