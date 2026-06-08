@@ -390,22 +390,14 @@ impl StatusManager {
 
     pub fn status_stratum1(&self, conditions: Vec<Condition>) -> Status {
         debug!("Conditions for stratum1s: {:?}", conditions.len());
-        let status = evaluate_conditions_with_key_value(
-            conditions,
-            "stratum1_servers",
-            self.get_by_type_ok(ServerType::Stratum1).len(),
-        );
+        let status = self.evaluate_conditions_with_full_scope(conditions);
         info!("Stratum1 status: {:?}", status);
         status
     }
 
     pub fn status_stratum0(&self, conditions: Vec<Condition>) -> Status {
         debug!("Conditions for stratum0s: {:?}", conditions.len());
-        let status = evaluate_conditions_with_key_value(
-            conditions,
-            "stratum0_servers",
-            self.get_by_type_ok(ServerType::Stratum0).len(),
-        );
+        let status = self.evaluate_conditions_with_full_scope(conditions);
         info!("Stratum0 status: {:?}", status);
         status
     }
@@ -430,11 +422,7 @@ impl StatusManager {
 
     pub fn status_syncserver(&self, conditions: Vec<Condition>) -> Status {
         debug!("Conditions for syncservers: {:?}", conditions.len());
-        let status = evaluate_conditions_with_key_value(
-            conditions,
-            "sync_servers",
-            self.get_by_type_ok(ServerType::SyncServer).len(),
-        );
+        let status = self.evaluate_conditions_with_full_scope(conditions);
         info!("Syncserver status: {:?}", status);
         status
     }
@@ -472,8 +460,18 @@ impl StatusManager {
     }
 
     fn evaluate_overall_conditions(&self, conditions: Vec<Condition>) -> Status {
-        let mut scope = Scope::new();
+        self.evaluate_conditions_with_full_scope(conditions)
+    }
+
+    fn evaluate_conditions_with_full_scope(&self, conditions: Vec<Condition>) -> Status {
+        let mut scope = self.build_condition_scope();
         let engine = Engine::new();
+
+        evaluate_conditions(conditions, &mut scope, &engine)
+    }
+
+    fn build_condition_scope(&self) -> Scope<'static> {
+        let mut scope = Scope::new();
 
         for server_type in [
             ServerType::Stratum0,
@@ -500,6 +498,8 @@ impl StatusManager {
             scope.push(format!("{}_total", server_type.to_label()), total);
         }
 
+        let repo_status = self.get_status_per_unique_repo();
+
         scope.push(
             "stratum0_servers",
             self.get_by_type_ok(ServerType::Stratum0).len() as i64,
@@ -515,28 +515,13 @@ impl StatusManager {
             self.get_by_type_ok(ServerType::SyncServer).len() as i64,
         );
 
-        scope.push(
-            "repos_total",
-            self.get_status_per_unique_repo().len() as i64,
-        );
+        scope.push("repos_total", repo_status.len() as i64);
 
-        let not_ok_repos = self
-            .get_status_per_unique_repo()
-            .iter()
-            .filter(|r| r.1 != &Status::OK)
-            .count() as i64;
+        let not_ok_repos = repo_status.iter().filter(|r| r.1 != &Status::OK).count() as i64;
 
         scope.push("repos_out_of_sync", not_ok_repos);
 
-        for condition in conditions {
-            debug!("Evaluating condition: {:?}", condition);
-
-            if evaluate_condition(&condition, &mut scope, &engine) {
-                return condition.status;
-            }
-        }
-
-        Status::FAILED
+        scope
     }
 }
 
@@ -592,25 +577,13 @@ fn evaluate_condition(condition: &Condition, scope: &mut Scope, engine: &Engine)
     }
 }
 
-fn evaluate_conditions_with_key_value(
-    conditions: Vec<Condition>,
-    key: &str,
-    value: usize,
-) -> Status {
-    let mut scope = Scope::new();
-    scope.push(key, value as i64);
-
-    let engine = Engine::new();
-
+fn evaluate_conditions(conditions: Vec<Condition>, scope: &mut Scope, engine: &Engine) -> Status {
     conditions
         .iter()
         .inspect(|condition| {
-            debug!(
-                "Evaluating condition: {:?} (key: <{:?}>, val <{:?}>)",
-                condition, key, value
-            );
+            debug!("Evaluating condition: {:?}", condition);
         })
-        .find(|&condition| evaluate_condition(condition, &mut scope, &engine))
+        .find(|&condition| evaluate_condition(condition, scope, engine))
         .map_or(Status::FAILED, |condition| condition.status)
 }
 
@@ -731,6 +704,46 @@ mod tests {
         let conditions = create_conditions_overall_new();
         let overall_status = status_manager.evaluate_overall_conditions(conditions);
         assert_eq!(overall_status, Status::DEGRADED);
+    }
+
+    #[test]
+    fn test_stratum1_conditions_can_use_detailed_variables() {
+        let status_manager = create_status_manager();
+        let conditions = vec![
+            Condition {
+                when: "stratum1_degraded == 1 && stratum1_total == 2".to_string(),
+                status: Status::DEGRADED,
+            },
+            Condition {
+                when: "stratum1_ok == 1".to_string(),
+                status: Status::OK,
+            },
+        ];
+
+        assert_eq!(status_manager.status_stratum1(conditions), Status::DEGRADED);
+    }
+
+    #[test]
+    fn test_stratum0_conditions_can_use_legacy_and_detailed_variables() {
+        let status_manager = create_status_manager();
+        let conditions = vec![Condition {
+            when: "stratum0_servers == 1 && stratum0_maintenance == 1 && stratum0_total == 2"
+                .to_string(),
+            status: Status::WARNING,
+        }];
+
+        assert_eq!(status_manager.status_stratum0(conditions), Status::WARNING);
+    }
+
+    #[test]
+    fn test_syncserver_conditions_can_use_detailed_variables() {
+        let status_manager = create_status_manager();
+        let conditions = vec![Condition {
+            when: "syncserver_ok == 1 && syncserver_total == 1".to_string(),
+            status: Status::OK,
+        }];
+
+        assert_eq!(status_manager.status_syncserver(conditions), Status::OK);
     }
 
     #[test]

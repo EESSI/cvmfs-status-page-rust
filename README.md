@@ -82,7 +82,7 @@ There are four supported status conditions that are evaluated:
 
 Each of these status conditions can have any number of rules associated with them, each with a `status` key that can be set to `OK`, `DEGRADED`, `WARNING`, or `FAILED`. The rules are evaluated in order, and the first matching rule will set the status for the condition in question.
 
-Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evaluated in order. The first matching rule will set the given status for the case in question. Valid variables for the conditions are:
+Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evaluated in order. The first matching rule will set the given status for the case in question. All condition groups use the same variable scope, so these variables are valid in rules for `eessi_status`, `stratum0_servers`, `stratum1_servers`, and `sync_servers`:
 
 ### Repository related
 
@@ -91,9 +91,9 @@ Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evalua
 
 ### Server counts, legacy variables
 
-- `stratum0_servers`: The number of stratum0 servers successfully scraped with a state of OK
-- `stratum1_servers`: The number of stratum1 servers successfully scraped with a state of OK
-- `sync_servers`: The number of sync servers successfully scraped with a state of OK
+- `stratum0_servers`: The number of stratum0 servers successfully scraped with status OK
+- `stratum1_servers`: The number of stratum1 servers successfully scraped with status OK
+- `sync_servers`: The number of sync servers successfully scraped with status OK
 
 ### Server counts, detailed variables
 
