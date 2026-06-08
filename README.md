@@ -82,12 +82,43 @@ There are four supported status conditions that are evaluated:
 
 Each of these status conditions can have any number of rules associated with them, each with a `status` key that can be set to `OK`, `DEGRADED`, `WARNING`, or `FAILED`. The rules are evaluated in order, and the first matching rule will set the status for the condition in question.
 
-Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evaluated in order. The first matching rule will set the given status for the case in question. Valid variables for the conditions are:
+Rules for conditions are evaluated using [Rhai](https://rhai.rs), and are evaluated in order. The first matching rule will set the given status for the case in question. All condition groups use the same variable scope, so these variables are valid in rules for `eessi_status`, `stratum0_servers`, `stratum1_servers`, and `sync_servers`:
 
-- `stratum0_servers`: The number of stratum0 servers successfully scraped
-- `stratum1_servers`: The number of stratum1 servers successfully scraped
-- `sync_servers`: The number of sync servers successfully scraped
-- `repos_out_of_sync`: The number of repositories out of sync across all servers scraped
+### Repository related
+
+- `repos_out_of_sync`: The number of unique repositories out of sync across all servers scraped
+- `repos_total`: The total number of unique repositories scraped across all servers
+
+### Server counts, legacy variables
+
+- `stratum0_servers`: The number of stratum0 servers successfully scraped with status OK
+- `stratum1_servers`: The number of stratum1 servers successfully scraped with status OK
+- `sync_servers`: The number of sync servers successfully scraped with status OK
+
+### Server counts, detailed variables
+
+- `stratum0_ok`: The number of stratum0 servers with status OK (legacy: `stratum0_servers`)
+- `stratum0_degraded`: The number of stratum0 servers with status DEGRADED
+- `stratum0_warning`: The number of stratum0 servers with status WARNING
+- `stratum0_failed`: The number of stratum0 servers with status FAILED
+- `stratum0_maintenance`: The number of stratum0 servers with status MAINTENANCE
+- `stratum0_total`: The total number of stratum0 servers scraped (should equal stratum0_ok + stratum0_degraded + stratum0_warning + stratum0_failed + stratum0_maintenance)
+
+- `stratum1_ok`: The number of stratum1 servers with status OK (legacy: `stratum1_servers`)
+- `stratum1_degraded`: The number of stratum1 servers with status DEGRADED
+- `stratum1_warning`: The number of stratum1 servers with status WARNING
+- `stratum1_failed`: The number of stratum1 servers with status FAILED
+- `stratum1_maintenance`: The number of stratum1 servers with status MAINTENANCE
+- `stratum1_total`: The total number of stratum1 servers scraped (should equal stratum1_ok + stratum1_degraded + stratum1_warning + stratum1_failed + stratum1_maintenance)
+
+- `syncserver_ok`: The number of sync servers with status OK (legacy: `sync_servers`)
+- `syncserver_degraded`: The number of sync servers with status DEGRADED
+- `syncserver_warning`: The number of sync servers with status WARNING
+- `syncserver_failed`: The number of sync servers with status FAILED
+- `syncserver_maintenance`: The number of sync servers with status MAINTENANCE
+- `syncserver_total`: The total number of sync servers scraped (should equal syncserver_ok + syncserver_degraded + syncserver_warning + syncserver_failed + syncserver_maintenance)
+
+Note: It's `syncserver` (no underscore and singular, like stratum0/1).
 
 ### Example of rules
 
@@ -100,19 +131,19 @@ Imagine these conditions for the overall status, `eessi_status`:
     "conditions": [
         {
             "status": "FAILED",
-            "when": "stratum1_servers == 0"
+            "when": "stratum1_ok == 0"
         },
         {
             "status": "WARNING",
-            "when": "stratum0_servers == 0 && stratum1_servers > 1"
+            "when": "stratum0_ok == 0 && stratum1_ok > 1"
         },
         {
             "status": "WARNING",
-            "when": "sync_servers == 0 && stratum1_servers > 1"
+            "when": "syncserver_ok == 0 && stratum1_ok > 1"
         },
         {
             "status": "DEGRADED",
-            "when": "stratum0_servers == 1 && stratum1_servers == 1"
+            "when": "stratum0_ok == 1 && ( stratum1_warning + stratum1_degraded + stratum1_failed ) > 0"
         },
         {
             "status": "DEGRADED",
@@ -120,7 +151,7 @@ Imagine these conditions for the overall status, `eessi_status`:
         },
         {
             "status": "OK",
-            "when": "stratum0_servers > 0 && stratum1_servers > 1 && sync_servers > 0"
+            "when": "stratum0_ok > 0 && stratum1_ok > 1 && syncserver_ok > 0"
         }
     ]
 }
@@ -131,7 +162,7 @@ In this example, as the rules are applied in order, the engine will check, in or
 1. If there are no stratum1 servers online, the status is set to `FAILED`.
 2. If there are no stratum0 servers online and more than one stratum1 server, the status is set to `WARNING`.
 3. If there are no sync servers online and more than one stratum1 server, the status is set to `WARNING`.
-4. If the stratum0 server is online and only one stratum1 server was found, the status is set to `DEGRADED`.
+4. If the stratum0 server is online and any stratum1 server has the status degraded, warning, or failed, the status is set to `DEGRADED`.
 5. If more than one repository is out of sync, the status is set to `DEGRADED`.
 6. If there is at least one stratum0 server, more than one stratum1 server, and at least one sync server, the status is set to `OK`.
 
