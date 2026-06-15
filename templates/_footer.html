@@ -1,0 +1,15 @@
+<div class="footer">
+    Last updated {{ last_update }} |
+    {% if active == "status" %}
+    <span>status</span>
+    {% else %}
+    <a href="{{ status_url }}">status</a>
+    {% endif %}
+    |
+    {% if active == "trends" %}
+    <span>trends</span>
+    {% else %}
+    <a href="{{ trends_url }}">trends</a>
+    {% endif %}
+    | {{ contact_email }}
+</div>

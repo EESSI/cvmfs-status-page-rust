@@ -27,11 +27,16 @@ pub fn render_template_to_file(
 ) -> Result<()> {
     let rendered = render_template(template_name, context)?;
     let fqfn = Path::new(destination).join(filename);
-
-    let mut tmpfile = NamedTempFile::new_in(destination).context(format!(
-        "Failed to create temporary file in {}",
-        destination
+    let parent = fqfn
+        .parent()
+        .context(format!("Invalid template output path: {:?}", fqfn))?;
+    std::fs::create_dir_all(parent).context(format!(
+        "Failed to create template output directory: {:?}",
+        parent
     ))?;
+
+    let mut tmpfile = NamedTempFile::new_in(parent)
+        .context(format!("Failed to create temporary file in {:?}", parent))?;
 
     trace!("Writing to temporary file: {:?}", tmpfile.path());
     tmpfile
@@ -193,6 +198,54 @@ mod tests {
         assert!(serialized.contains(name));
         assert!(serialized.contains(revision_class));
         assert!(serialized.contains(snapshot_class));
+        Ok(())
+    }
+
+    #[test]
+    fn test_templates_parse() -> Result<()> {
+        init_templates()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_status_and_trends_templates_render_with_minimal_context() -> Result<()> {
+        let mut status_context = tera::Context::new();
+        status_context.insert(
+            "data",
+            &serde_json::json!({
+                "title": "Test",
+                "asset_base_url": "",
+                "history_url": "history.json",
+                "trends_url": "trends.html",
+                "eessi_status": {"class": "status-ok", "text": "OK", "description": "OK"},
+                "legend": [],
+                "stratum0": {"status_class": "status-ok", "details": []},
+                "stratum1": {"status_class": "status-ok", "servers": []},
+                "syncservers": {"status_class": "status-ok", "servers": []},
+                "repositories_status": {"revision_class": "status-ok"},
+                "repositories": [],
+                "history_meta": null,
+                "last_update": "2026-06-11T00:00:00Z",
+                "contact_email": "test@example.com"
+            }),
+        );
+        render_template("status.html", &status_context)?;
+
+        let mut trends_context = tera::Context::new();
+        trends_context.insert(
+            "data",
+            &serde_json::json!({
+                "title": "Test trends",
+                "asset_base_url": "",
+                "back_url": "index.html",
+                "trends_json_url": "trends.json",
+                "external_metrics_configured": false,
+                "external_metrics": null,
+                "generated_at": 0,
+                "contact_email": "test@example.com"
+            }),
+        );
+        render_template("trends.html", &trends_context)?;
         Ok(())
     }
 }

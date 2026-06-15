@@ -36,6 +36,13 @@
     "ignored_repositories": [
         "test.eessi.io"
     ],
+    "history": {
+        "enabled": true,
+        "directory": "history",
+        "retention_days_raw": 90,
+        "retention_days_daily": 90,
+        "bucket_window_days": 90
+    },
     "rules": [
         {
             "id": "stratum1_servers",

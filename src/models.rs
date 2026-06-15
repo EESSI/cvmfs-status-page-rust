@@ -137,6 +137,212 @@ pub struct StatusPageData {
     pub repositories: Vec<RepoStatus>,
     pub config: ConfigFile,
     pub servers: Vec<ServerStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<StatusSummary>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub repositories_enriched: Vec<RepositoryEnriched>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub servers_enriched: Vec<ServerEnriched>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history_meta: Option<HistoryMeta>,
+    pub trends_url: String,
+    pub history_url: String,
+    pub asset_base_url: String,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct StatusSummary {
+    pub stratum0_count: usize,
+    pub stratum1_count: usize,
+    pub syncserver_count: usize,
+    pub repo_count: usize,
+    pub total_catalogue_size_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worst_sync_lag_seconds: Option<i64>,
+    pub geographic_spread: GeographicSpread,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct GeographicSpread {
+    pub stratum1_countries: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct RepositoryEnriched {
+    pub name: String,
+    pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stratum0_revision: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stratum0_timestamp: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stratum1_min_revision: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stratum1_max_revision: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub divergence: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_lag_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalogue_size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl_seconds: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ServerEnriched {
+    pub hostname: String,
+    pub server_type: String,
+    pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geo: Option<ServerGeo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uptime: Option<ServerUptime>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub incidents_90d: Vec<Incident>,
+    pub repositories: Vec<ServerRepositoryEnriched>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ServerGeo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub country: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lat: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lon: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct ServerUptime {
+    pub pct_30d: f64,
+    pub pct_90d: f64,
+    pub observed_samples_30d: usize,
+    pub observed_samples_90d: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_ok_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_failure_at: Option<i64>,
+    pub longest_outage_seconds_90d: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mttr_seconds_90d: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Incident {
+    pub start: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<i64>,
+    pub duration_seconds: i64,
+    pub status: Status,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ServerRepositoryEnriched {
+    pub name: String,
+    pub revision: i32,
+    pub timestamp: i64,
+    pub catalogue_size_bytes: u64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct HistoryMeta {
+    pub url: String,
+    pub bucket_window_days: u32,
+    pub snapshots_raw: usize,
+    pub snapshots_daily: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub earliest_snapshot: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_snapshot: Option<i64>,
+    pub schema_version: u8,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct HistoryJson {
+    pub v: u8,
+    pub generated_at: i64,
+    pub bucket_window_days: u32,
+    pub servers: std::collections::BTreeMap<String, HistoryServerJson>,
+    pub repositories: std::collections::BTreeMap<String, HistoryRepoJson>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct HistoryServerJson {
+    pub server_type: String,
+    pub uptime: ServerUptime,
+    pub bars: Vec<HistoryBar>,
+    pub incidents_90d: Vec<Incident>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct HistoryBar {
+    pub d: String,
+    pub s: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ok_fraction: Option<f64>,
+    pub transitions: usize,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+pub struct HistoryRepoJson {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_lag_p50_30d: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_lag_p95_30d: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_lag_max_30d: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revisions_per_week_30d: Option<f64>,
+    pub revision_series: Vec<RevisionPoint>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct RevisionPoint {
+    pub t: i64,
+    pub r: i32,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct TrendsPageData {
+    pub v: u8,
+    pub generated_at: i64,
+    pub back_url: String,
+    pub status_json_url: String,
+    pub trends_json_url: String,
+    pub asset_base_url: String,
+    pub title: String,
+    pub contact_email: String,
+    pub external_metrics_configured: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_metrics: Option<ExternalMetricsJson>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ExternalMetricsJson {
+    pub source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fetched_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sampled_at: Option<i64>,
+    pub fallback_from_history: bool,
+    pub stratum1_disk_usage: DiskUsageJson,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct DiskUsageJson {
+    pub unit: String,
+    pub current_bytes: u64,
+    pub current_human: String,
+    pub max_bytes_52w: u64,
+    pub max_human_52w: String,
+    pub series: Vec<DiskUsagePoint>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct DiskUsagePoint {
+    pub t: i64,
+    pub bytes: u64,
 }
 
 pub trait HasStatusField {
@@ -328,6 +534,137 @@ impl StatusManager {
             .into_iter()
             .map(Server::to_server_status)
             .collect()
+    }
+
+    pub fn current_summary(&self) -> StatusSummary {
+        let mut countries = Vec::<String>::new();
+        countries.sort();
+        countries.dedup();
+
+        let total_catalogue_size_bytes = self
+            .servers
+            .iter()
+            .flat_map(|s| s.repositories.iter())
+            .map(|r| r.manifest.b as u64)
+            .sum();
+
+        StatusSummary {
+            stratum0_count: self.get_by_type(ServerType::Stratum0).len(),
+            stratum1_count: self.get_by_type(ServerType::Stratum1).len(),
+            syncserver_count: self.get_by_type(ServerType::SyncServer).len(),
+            repo_count: self.get_status_per_unique_repo().len(),
+            total_catalogue_size_bytes,
+            worst_sync_lag_seconds: self.worst_sync_lag_seconds(),
+            geographic_spread: GeographicSpread {
+                stratum1_countries: countries,
+            },
+        }
+    }
+
+    pub fn repositories_enriched(&self) -> Vec<RepositoryEnriched> {
+        let repo_status = self.get_status_per_unique_repo();
+        let mut names = repo_status.keys().cloned().collect::<Vec<_>>();
+        names.sort();
+
+        names
+            .into_iter()
+            .map(|name| {
+                let stratum0_repo = self
+                    .servers
+                    .iter()
+                    .find(|s| s.server_type == ServerType::Stratum0)
+                    .and_then(|s| s.repositories.iter().find(|r| r.name == name));
+                let stratum1_revisions = self
+                    .servers
+                    .iter()
+                    .filter(|s| s.server_type == ServerType::Stratum1)
+                    .flat_map(|s| s.repositories.iter().filter(|r| r.name == name))
+                    .map(|r| r.revision)
+                    .collect::<Vec<_>>();
+                let stratum1_timestamps = self
+                    .servers
+                    .iter()
+                    .filter(|s| s.server_type == ServerType::Stratum1)
+                    .flat_map(|s| s.repositories.iter().filter(|r| r.name == name))
+                    .map(|r| r.manifest.t)
+                    .collect::<Vec<_>>();
+                let stratum1_min_revision = stratum1_revisions.iter().min().copied();
+                let stratum1_max_revision = stratum1_revisions.iter().max().copied();
+                let divergence = match (stratum1_min_revision, stratum1_max_revision) {
+                    (Some(min), Some(max)) => Some(max - min),
+                    _ => None,
+                };
+                let sync_lag_seconds = stratum0_repo.and_then(|s0| {
+                    stratum1_timestamps
+                        .iter()
+                        .min()
+                        .map(|min_ts| (s0.manifest.t - min_ts).max(0))
+                });
+                let catalogue_size_bytes =
+                    stratum0_repo.map(|r| r.manifest.b as u64).or_else(|| {
+                        self.servers
+                            .iter()
+                            .flat_map(|s| s.repositories.iter())
+                            .find(|r| r.name == name)
+                            .map(|r| r.manifest.b as u64)
+                    });
+
+                RepositoryEnriched {
+                    name: name.clone(),
+                    status: *repo_status.get(&name).unwrap_or(&Status::OK),
+                    stratum0_revision: stratum0_repo.map(|r| r.revision),
+                    stratum0_timestamp: stratum0_repo.map(|r| r.manifest.t),
+                    stratum1_min_revision,
+                    stratum1_max_revision,
+                    divergence,
+                    sync_lag_seconds,
+                    catalogue_size_bytes,
+                    ttl_seconds: stratum0_repo.map(|r| r.manifest.d as i64),
+                }
+            })
+            .collect()
+    }
+
+    pub fn servers_enriched(&self) -> Vec<ServerEnriched> {
+        self.servers
+            .iter()
+            .map(|server| ServerEnriched {
+                hostname: server.hostname.to_string(),
+                server_type: server.server_type.to_label().to_string(),
+                status: server.status,
+                geo: None,
+                uptime: None,
+                incidents_90d: Vec::new(),
+                repositories: server
+                    .repositories
+                    .iter()
+                    .map(|repo| ServerRepositoryEnriched {
+                        name: repo.name.clone(),
+                        revision: repo.revision,
+                        timestamp: repo.manifest.t,
+                        catalogue_size_bytes: repo.manifest.b as u64,
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    pub fn worst_sync_lag_seconds(&self) -> Option<i64> {
+        let stratum0s = self.get_by_type(ServerType::Stratum0);
+        let stratum0 = stratum0s.first()?;
+        self.servers
+            .iter()
+            .filter(|s| s.server_type == ServerType::Stratum1)
+            .flat_map(|s1| {
+                s1.repositories.iter().filter_map(|repo| {
+                    stratum0
+                        .repositories
+                        .iter()
+                        .find(|r| r.name == repo.name)
+                        .map(|s0_repo| (s0_repo.manifest.t - repo.manifest.t).max(0))
+                })
+            })
+            .max()
     }
 
     #[allow(dead_code)]

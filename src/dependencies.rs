@@ -10,6 +10,9 @@ use tempfile::NamedTempFile;
 
 const RESOURCES_DIR: Dir = include_dir!("resources");
 const STATUS_TEMPLATE: &str = include_str!("../templates/status.html");
+const TRENDS_TEMPLATE: &str = include_str!("../templates/trends.html");
+const HEADER_TEMPLATE: &str = include_str!("../templates/_header.html");
+const FOOTER_TEMPLATE: &str = include_str!("../templates/_footer.html");
 
 pub struct Stats {
     files_checked: AtomicUsize,
@@ -39,7 +42,10 @@ pub fn populate(path: &str, force: bool) -> Result<()> {
 
     populate_dirs_and_files(&RESOURCES_DIR, output_dir, force)?;
     populate_root_files(output_dir, force)?;
-    create_status_template(output_dir, force)?;
+    create_template(output_dir, force, "status.html", STATUS_TEMPLATE)?;
+    create_template(output_dir, force, "trends.html", TRENDS_TEMPLATE)?;
+    create_template(output_dir, force, "_header.html", HEADER_TEMPLATE)?;
+    create_template(output_dir, force, "_footer.html", FOOTER_TEMPLATE)?;
 
     debug!(
         "Population of resource files complete. Files checked: {}, written: {}, skipped: {}",
@@ -105,21 +111,19 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_status_template(output_dir: &Path, force: bool) -> Result<()> {
-    let template_path = output_dir.join("templates").join("status.html");
+fn create_template(output_dir: &Path, force: bool, name: &str, contents: &str) -> Result<()> {
+    let template_path = output_dir.join("templates").join(name);
     STATS.files_checked.fetch_add(1, Ordering::Relaxed);
-    trace!("Checking status template: {:?}", template_path);
+    trace!("Checking template: {:?}", template_path);
     if should_skip_file(&template_path, force) {
         STATS.files_skipped.fetch_add(1, Ordering::Relaxed);
-        trace!("Skipping existing status template");
+        trace!("Skipping existing template");
         return Ok(());
     }
-    trace!("Creating status template: {:?}", template_path);
+    trace!("Creating template: {:?}", template_path);
     ensure_parent_dir(&template_path)?;
-    atomic_write(&template_path, STATUS_TEMPLATE.as_bytes()).context(format!(
-        "Failed to create status template: {:?}",
-        template_path
-    ))?;
+    atomic_write(&template_path, contents.as_bytes())
+        .context(format!("Failed to create template: {:?}", template_path))?;
     STATS.files_written.fetch_add(1, Ordering::Relaxed);
     Ok(())
 }

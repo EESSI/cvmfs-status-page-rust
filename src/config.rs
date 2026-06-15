@@ -2,6 +2,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::sync::RwLock;
 
 use crate::models::Status;
@@ -26,6 +27,38 @@ fn scrape_only_explicit_repositories() -> bool {
     false
 }
 
+fn default_history_enabled() -> bool {
+    true
+}
+
+fn default_history_directory() -> PathBuf {
+    PathBuf::from("history")
+}
+
+fn default_retention_days_raw() -> u32 {
+    90
+}
+
+fn default_retention_days_daily() -> u32 {
+    90
+}
+
+fn default_bucket_window_days() -> u32 {
+    90
+}
+
+fn default_timeout_seconds() -> u64 {
+    10
+}
+
+fn default_range_weeks() -> u32 {
+    52
+}
+
+fn default_step() -> String {
+    "1w".to_string()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFile {
     pub meta: ConfigSection,
@@ -35,6 +68,62 @@ pub struct ConfigFile {
     pub limit_scraping_to_repositories: bool,
     pub ignored_repositories: Vec<String>,
     pub rules: Vec<Rule>,
+    #[serde(default)]
+    pub history: HistorySection,
+    #[serde(default)]
+    pub external_metrics: Option<ExternalMetricsConfig>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct HistorySection {
+    #[serde(default = "default_history_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_history_directory")]
+    pub directory: PathBuf,
+    #[serde(default = "default_retention_days_raw")]
+    pub retention_days_raw: u32,
+    #[serde(default = "default_retention_days_daily")]
+    pub retention_days_daily: u32,
+    #[serde(default = "default_bucket_window_days")]
+    pub bucket_window_days: u32,
+}
+
+impl Default for HistorySection {
+    fn default() -> Self {
+        Self {
+            enabled: default_history_enabled(),
+            directory: default_history_directory(),
+            retention_days_raw: default_retention_days_raw(),
+            retention_days_daily: default_retention_days_daily(),
+            bucket_window_days: default_bucket_window_days(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ExternalMetricsConfig {
+    Grafana(GrafanaMetricsConfig),
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct GrafanaMetricsConfig {
+    pub url: String,
+    pub datasource_uid: String,
+    pub token_env: String,
+    #[serde(default = "default_timeout_seconds")]
+    pub timeout_seconds: u64,
+    pub stratum1_disk_usage: Stratum1DiskUsageConfig,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Stratum1DiskUsageConfig {
+    pub query: String,
+    #[serde(default = "default_range_weeks")]
+    pub range_weeks: u32,
+    #[serde(default = "default_step")]
+    pub step: String,
+    pub instance_regex: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -149,6 +238,8 @@ mod tests {
             ignored_repositories: vec![],
             rules: vec![],
             limit_scraping_to_repositories: false,
+            history: HistorySection::default(),
+            external_metrics: None,
         };
 
         let manager = ConfigManager {
@@ -186,6 +277,8 @@ mod tests {
             ignored_repositories: vec![],
             rules: vec![],
             limit_scraping_to_repositories: false,
+            history: HistorySection::default(),
+            external_metrics: None,
         };
 
         let manager = ConfigManager {
