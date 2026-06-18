@@ -7,6 +7,8 @@ This repository contains the source code for an EESSI status page generator. The
 - Scrapes server statuses and generates a static HTML status page.
 - Configurable via a JSON configuration file.
 - Generates both HTML and JSON status reports.
+- Keeps local JSONL history by default and renders history bars and derived reliability metrics.
+- Generates a trends page with optional Grafana/Prometheus disk usage charts.
 - Automatically populates required resources (images, fonts, CSS, JS, templates, etc.) into the destination directory.
 - Supports local editing of resource files, and overwriting them back to the defaults with the `--force` option.
 - Evaluates rules for status conditions using [Rhai](https://rhai.rs).
@@ -42,6 +44,8 @@ Run the binary with the desired options:
 --force-resource-creation, -f: Force overwrite of existing files.
 --output-file, -o: Filename for the generated status page. Default is index.html.
 --json-output-file, -j: Filename for the generated JSON status. Default is status.json.
+--trends-output-file: Filename for the generated trends page. Default is trends.html.
+--trends-json-output-file: Filename for the generated trends JSON. Default is trends.json.
 --prometheus-metrics, -p: Enable Prometheus metrics generation.
 ```
 
@@ -62,6 +66,64 @@ RUST_LOG=info ./cvmfs-status-page-rust -c config.json
 ## Resources
 
 Resources such as images, fonts, CSS, JS, and templates will be populated into the destination directory from the binary if missing. These resources can be edited locally as their existience will prevent recreation. To reinstall the shipped versions, issue the --force option.
+
+## History and Trends
+
+History is enabled by default and stored under `history/` inside the destination directory. Add `"history": { "enabled": false }` to opt out. When enabled, the generator writes `history/snapshots.jsonl`, compact daily rollups, `history.json`, derived uptime/incident fields in `status.json`, and history bars on the status page. Raw samples are retained for 90 days by default.
+
+Generated public outputs include:
+
+- `index.html` by default: the status page, configurable with `--output-file`.
+- `status.json`: the current status payload, configurable with `--json-output-file`.
+- `trends.html`: the trends page, configurable with `--trends-output-file`.
+- `trends.json`: the trends page backing data, configurable with `--trends-json-output-file`.
+- `history.json`: the derived history summary used by the status page when history is enabled.
+- `metrics`: Prometheus-style metrics when `--prometheus-metrics` is enabled.
+
+See [JSON outputs](docs/json-outputs.md) for the generated JSON file formats. See [Prometheus metrics](docs/metrics.md) for the metrics file format.
+
+### Grafana-backed disk usage metrics
+
+Optional Grafana-backed disk usage metrics can be configured with `external_metrics`. The token is read from the environment variable named by `token_env`; tokens are not stored in the JSON config. If the source is configured but unavailable, persisted history samples are used for the chart when available.
+
+Example `external_metrics` block (added at the top level of `config.json`):
+
+```json
+"external_metrics": {
+  "kind": "grafana",
+  "url": "https://grafana.example.org",
+  "datasource_uid": "<prometheus-datasource-uid>",
+  "token_env": "GRAFANA_TOKEN",
+  "timeout_seconds": 10,
+  "stratum1_disk_usage": {
+    "query": "avg(node_filesystem_size_bytes{mountpoint=\"/srv\",instance=~\"{instance_regex}\"}) - avg(node_filesystem_avail_bytes{mountpoint=\"/srv\",instance=~\"{instance_regex}\"})",
+    "range_weeks": 52,
+    "step": "1w",
+    "instance_regex": ".*-s1\\.eessi\\.science(:[0-9]+)?"
+  }
+}
+```
+
+Then export the token before running:
+
+```sh
+export GRAFANA_TOKEN='glsa_...'
+./cvmfs-status-page-rust -d ./output -c ./config.json
+```
+
+Field reference:
+
+- `kind`: must be `"grafana"` (currently the only supported source).
+- `url`: Grafana base URL. Requests are sent to `{url}/api/datasources/proxy/uid/{datasource_uid}/api/v1/query_range` with `Authorization: Bearer $token`.
+- `datasource_uid`: UID of the Prometheus/Mimir datasource inside Grafana (Connections → Data sources → your datasource; the UID is in the URL).
+- `token_env`: name of the environment variable that holds the Grafana API token. The variable name is your choice as long as the exported variable matches.
+- `timeout_seconds`: per-request timeout. Defaults to `10`.
+- `stratum1_disk_usage.query`: PromQL query returning bytes. The literal substring `{instance_regex}` is replaced with `instance_regex` before the query is sent.
+- `stratum1_disk_usage.instance_regex`: regex matching the Stratum 1 `instance` label values to aggregate. Include an optional port suffix if Prometheus stores labels like `host:9100`.
+- `stratum1_disk_usage.range_weeks`: how far back to query. Defaults to `52`.
+- `stratum1_disk_usage.step`: PromQL step. Defaults to `"1w"`.
+
+If the token env var is missing or empty, or Grafana is unreachable, the trends page falls back to persisted history samples.
 
 ## Server Backend Types
 
@@ -171,106 +233,4 @@ In this example, as the rules are applied in order, the engine will check, in or
 Prometheus metrics can be enabled with the `--prometheus-metrics` option. The metrics are exposed as the file `metrics` in the
 output directory and are generated with the timestamp being the start of the application.
 
-The status codes used in the metrics are as follows:
-
-- `0`: OK
-- `1`: Degraded
-- `2`: Warning
-- `3`: Failed
-- `9`: Maintenance
-
-A typical metrics file might look like this:
-
-```prometheus
-# HELP eessi_status EESSI status
-# TYPE eessi_status gauge
-eessi_status 2 1720525887957
-# HELP stratum0_status Stratum0 status
-# TYPE stratum0_status gauge
-stratum0_status 3 1720525887957
-# HELP stratum1_status Stratum1 status
-# TYPE stratum1_status gauge
-stratum1_status 0 1720525887957
-# HELP syncservers_status SyncServers status
-# TYPE syncservers_status gauge
-syncservers_status 0 1720525887957
-# HELP repositories_status Repositories status
-# TYPE repositories_status gauge
-repositories_status 0 1720525887957
-# HELP status_overview Status overview
-# TYPE status_overview gauge
-status_overview{category="overall"} 0 1761206997670
-status_overview{category="stratum0"} 0 1761206997670
-status_overview{category="stratum1"} 0 1761206997670
-status_overview{category="syncservers"} 0 1761206997670
-status_overview{category="repositories"} 0 1761206997670
-# HELP repo_catalogue_size Repository catalogue size
-# TYPE repo_catalogue_size gauge
-repo_catalogue_size{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
-repo_catalogue_size{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
-repo_catalogue_size{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 133120 1761206997670
-repo_catalogue_size{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
-repo_catalogue_size{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
-repo_catalogue_size{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 133120 1761206997670
-repo_catalogue_size{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
-repo_catalogue_size{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
-repo_catalogue_size{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 133120 1761206997670
-repo_catalogue_size{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 9526272 1761206997670
-repo_catalogue_size{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 26624 1761206997670
-repo_catalogue_size{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 133120 1761206997670
-repo_catalogue_size{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 9526272 1761206997670
-repo_catalogue_size{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 26624 1761206997670
-repo_catalogue_size{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 133120 1761206997670
-# HELP repo_revision Repository revision
-# TYPE repo_revision gauge
-repo_revision{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 415 1761206997670
-repo_revision{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
-repo_revision{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 9744 1761206997670
-repo_revision{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 415 1761206997670
-repo_revision{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
-repo_revision{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 9744 1761206997670
-repo_revision{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 415 1761206997670
-repo_revision{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
-repo_revision{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 9744 1761206997670
-repo_revision{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 415 1761206997670
-repo_revision{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 522 1761206997670
-repo_revision{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 9744 1761206997670
-repo_revision{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 415 1761206997670
-repo_revision{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 522 1761206997670
-repo_revision{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 9744 1761206997670
-# HELP repo_timestamp Repository timestamp
-# TYPE repo_timestamp gauge
-repo_timestamp{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
-repo_timestamp{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
-repo_timestamp{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
-repo_timestamp{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
-repo_timestamp{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
-repo_timestamp{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
-repo_timestamp{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
-repo_timestamp{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
-repo_timestamp{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
-repo_timestamp{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 1760706941 1761206997670
-repo_timestamp{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 1750670430 1761206997670
-repo_timestamp{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 1761150935 1761206997670
-repo_timestamp{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 1760706941 1761206997670
-repo_timestamp{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 1750670430 1761206997670
-repo_timestamp{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 1761150935 1761206997670
-# HELP repo_ttl Repository TTL
-# TYPE repo_ttl gauge
-repo_ttl{type="stratum0",server="rug-nl-s0.eessi.science",repository="dev.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum0",server="rug-nl-s0.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum0",server="rug-nl-s0.eessi.science",repository="software.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="dev.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="aws-eu-central-s1.eessi.science",repository="software.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="azure-us-east-s1.eessi.science",repository="dev.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="azure-us-east-s1.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="azure-us-east-s1.eessi.science",repository="software.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="dev.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="riscv.eessi.io"} 240 1761206997670
-repo_ttl{type="stratum1",server="cvmfs-ext.gridpp.rl.ac.uk:8000",repository="software.eessi.io"} 240 1761206997670
-repo_ttl{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="dev.eessi.io"} 240 1761206997670
-repo_ttl{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="riscv.eessi.io"} 240 1761206997670
-repo_ttl{type="syncserver",server="aws-eu-west-s1-sync.eessi.science",repository="software.eessi.io"} 240 1761206997670
-
-```
+See [Prometheus metrics](docs/metrics.md) for the metric families, labels, status code values, and examples.

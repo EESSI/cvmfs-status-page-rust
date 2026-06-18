@@ -4,23 +4,24 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
-    <link rel="stylesheet" type="text/css" href="status.css">
-    <link rel="stylesheet" type="text/css" href="fa.all.min.css">
-    <script src="status.js" type="text/javascript"></script>
+    <link rel="stylesheet" type="text/css" href="{{ data.asset_base_url }}status.css">
+    <link rel="stylesheet" type="text/css" href="{{ data.asset_base_url }}fa.all.min.css">
+    <script>
+        window.STATUS_HISTORY_URL = "{{ data.history_url }}";
+    </script>
+    <script src="{{ data.asset_base_url }}status.js" type="text/javascript"></script>
 
     <title>{{ data.title }}</title>
 </head>
 
 <body>
 
-    <div class="header-row">
-        <div class="header-text">
-            <div class="content">
-                <h1 class="content-left">{{ data.title }}</h1>
-                <img class="content-right inline" src="eessi-512px.png" width="75px" />
-            </div>
-        </div>
-    </div>
+    {% set title = data.title %}
+    {% set active = "status" %}
+    {% set status_url = "#" %}
+    {% set trends_url = data.trends_url %}
+    {% set asset_base_url = data.asset_base_url %}
+    {% include "_header.html" %}
 
     <div class="content-row">
 
@@ -136,9 +137,20 @@
                 </div>
             </div>
         </div>
+
+        {% if data.history_meta %}
+        <div class="history-panel">
+            <h2>Recent history</h2>
+            <div id="history-bars" data-history-url="{{ data.history_url }}">
+                <p class="muted">Loading history...</p>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <div class="footer">Last updated {{ data.last_update }} | {{ data.contact_email }}</div>
+    {% set last_update = data.last_update %}
+    {% set contact_email = data.contact_email %}
+    {% include "_footer.html" %}
 
 </body>
 

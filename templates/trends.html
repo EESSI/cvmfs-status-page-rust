@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
+    <link rel="stylesheet" type="text/css" href="{{ data.asset_base_url }}status.css">
+    <link rel="stylesheet" type="text/css" href="{{ data.asset_base_url }}fa.all.min.css">
+    <script>
+        window.TRENDS_JSON_URL = "{{ data.trends_json_url }}";
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ data.asset_base_url }}trends.js" type="text/javascript"></script>
+    <title>{{ data.title }}</title>
+</head>
+
+<body>
+    {% set title = data.title %}
+    {% set active = "trends" %}
+    {% set status_url = data.back_url %}
+    {% set trends_url = "#" %}
+    {% set asset_base_url = data.asset_base_url %}
+    {% include "_header.html" %}
+
+    <div class="content-row">
+        {% if data.external_metrics_configured %}
+        <section class="infobox trends-section">
+            <h2>Stratum1 disk usage</h2>
+            <div id="disk-usage-chart" class="trends-chart-panel" data-trends-json-url="{{ data.trends_json_url }}">
+                <p class="muted">Loading disk usage...</p>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if not data.external_metrics_configured %}
+        <section class="infobox trends-section">
+            <h2>No capacity data configured</h2>
+            <p>Enable an external metric source to render shared Stratum1 disk usage.</p>
+            <p><a href="{{ data.back_url }}">Back to status</a></p>
+        </section>
+        {% endif %}
+    </div>
+
+    {% set last_update = data.generated_at %}
+    {% set contact_email = data.contact_email %}
+    {% include "_footer.html" %}
+</body>
+
+</html>
