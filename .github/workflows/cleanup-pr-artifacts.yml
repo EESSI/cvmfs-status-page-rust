@@ -1,0 +1,31 @@
+name: Cleanup PR Artifacts
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    name: Delete PR binary artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete artifacts for closed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          prefix="pr-${PR_NUMBER}-"
+          gh api --paginate "repos/${REPOSITORY}/actions/artifacts" \
+            --jq '.artifacts[] | select(.name | startswith("'"${prefix}"'")) | .id' \
+            | while read -r artifact_id; do
+                if [ -n "$artifact_id" ]; then
+                  gh api --method DELETE "repos/${REPOSITORY}/actions/artifacts/${artifact_id}"
+                fi
+              done
