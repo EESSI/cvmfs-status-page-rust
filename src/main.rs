@@ -29,10 +29,10 @@ use templating::{render_template_to_file, RepoStatus, StatusInfo};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "status-page",
+    name = env!("CARGO_PKG_NAME"),
     about = "An EESSI status page generator.",
-    author = "Terje Kvernes <terje@kvernes.no>",
-    version = "0.0.1",
+    author = env!("CARGO_PKG_AUTHORS"),
+    version = env!("CARGO_PKG_VERSION"),
     after_help = "Set the RUST_LOG environment variable to your desired log level for logging."
 )]
 struct Opt {

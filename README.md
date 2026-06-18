@@ -16,6 +16,14 @@ This repository contains the source code for an EESSI status page generator. The
 
 ## Installation
 
+### Prebuilt release
+
+Prebuilt x86_64 Linux binaries are published on GitHub Releases for version tags.
+Download the `cvmfs-status-page-rust-<version>-x86_64-unknown-linux-gnu.tar.gz`
+asset for the release you want, then verify it with the matching `.sha256` file.
+
+### Build from source
+
 - Install [Rust](https://www.rust-lang.org/tools/install)
 - `mkdir /tmp/build-dir && cd /tmp/build-dir`
 - `git clone https://github.com/EESSI/cvmfs-status-page-rust`
@@ -234,3 +242,23 @@ Prometheus metrics can be enabled with the `--prometheus-metrics` option. The me
 output directory and are generated with the timestamp being the start of the application.
 
 See [Prometheus metrics](docs/metrics.md) for the metric families, labels, status code values, and examples.
+
+## Release Process
+
+Releases are created automatically by GitHub Actions when a version tag is pushed.
+
+1. Update `version` in `Cargo.toml`.
+2. Move the relevant entries in `CHANGELOG.md` from `Unreleased` to a new
+   `## [x.y.z] - YYYY-MM-DD` section.
+3. Commit the version and changelog changes.
+4. Create and push a matching tag:
+
+```sh
+git tag -a vx.y.z -m "Release vx.y.z"
+git push origin vx.y.z
+```
+
+The release workflow verifies that the tag matches `Cargo.toml`, extracts the
+release notes from `CHANGELOG.md`, runs checks and tests, builds the
+`x86_64-unknown-linux-gnu` binary, and publishes a GitHub release with a tarball
+and SHA-256 checksum.

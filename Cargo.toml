@@ -2,6 +2,8 @@
 name = "cvmfs-status-page-rust"
 version = "0.0.1"
 edition = "2021"
+authors = ["Terje Kvernes <terje@kvernes.no>"]
+repository = "https://github.com/EESSI/cvmfs-status-page-rust"
 
 [dependencies]
 cvmfs_server_scraper = "0.0.7"
