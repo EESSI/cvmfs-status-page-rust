@@ -11,12 +11,19 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: cvmfs-status-page-rust
-  TARGET: x86_64-unknown-linux-gnu
 
 jobs:
-  release:
-    name: Build and publish release
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -25,7 +32,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-gnu
+          targets: ${{ matrix.target }}
 
       - name: Cache Cargo artifacts
         uses: Swatinem/rust-cache@v2
@@ -62,18 +69,69 @@ jobs:
         run: cargo test --all-targets --all-features --locked
 
       - name: Build release binary
-        run: cargo build --release --locked --target "$TARGET"
+        run: cargo build --release --locked --target "${{ matrix.target }}"
 
       - name: Package release artifact
         run: |
           version="${GITHUB_REF_NAME#v}"
-          package="${BINARY_NAME}-${version}-${TARGET}"
+          target="${{ matrix.target }}"
+          package="${BINARY_NAME}-${version}-${target}"
           mkdir -p "dist/${package}"
-          cp "target/${TARGET}/release/${BINARY_NAME}" "dist/${package}/"
+          cp "target/${target}/release/${BINARY_NAME}" "dist/${package}/"
           cp README.md CHANGELOG.md "dist/${package}/"
           tar -C dist -czf "dist/${package}.tar.gz" "${package}"
           cd dist
           sha256sum "${package}.tar.gz" > "${package}.tar.gz.sha256"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    runs-on: ubuntu-24.04
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Validate tag matches Cargo version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          if [ "$version" != "$cargo_version" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${cargo_version}" >&2
+            exit 1
+          fi
+
+      - name: Extract release notes from changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v version="$version" '
+            $0 ~ "^## \\[" version "\\]([[:space:]]|-|$)" { in_section = 1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "CHANGELOG.md has no notes for ${version}" >&2
+            exit 1
+          fi
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Publish GitHub release
         env:
