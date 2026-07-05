@@ -16,11 +16,48 @@ This repository contains the source code for an EESSI status page generator. The
 
 ## Installation
 
-### Prebuilt release
+### Install or update from a prebuilt release
 
-Prebuilt x86_64 Linux binaries are published on GitHub Releases for version tags.
-Download the `cvmfs-status-page-rust-<version>-x86_64-unknown-linux-gnu.tar.gz`
-asset for the release you want, then verify it with the matching `.sha256` file.
+Prebuilt Linux binaries are published on GitHub Releases for version tags.
+The release workflow publishes these targets:
+
+- `x86_64-unknown-linux-gnu`
+- `aarch64-unknown-linux-gnu`
+
+Install or update a specific release with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/EESSI/cvmfs-status-page-rust/main/scripts/install.sh \
+  | sh -s -- --tag v0.0.1 --install-dir /path/to/bin
+```
+
+You can also install by version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/EESSI/cvmfs-status-page-rust/main/scripts/install.sh \
+  | sh -s -- --version 0.0.1 --install-dir /path/to/bin
+```
+
+The install directory is required and must be writable by the current user. The
+script detects the Linux architecture, downloads the matching release asset and
+`.sha256` file, verifies the checksum, installs the binary atomically, and
+checks that `cvmfs-status-page-rust --version` reports the requested version.
+
+### Manual prebuilt install
+
+Download the release asset for your architecture from GitHub Releases:
+
+```sh
+version=0.0.1
+target=x86_64-unknown-linux-gnu
+package="cvmfs-status-page-rust-${version}-${target}"
+
+curl -fsSLO "https://github.com/EESSI/cvmfs-status-page-rust/releases/download/v${version}/${package}.tar.gz"
+curl -fsSLO "https://github.com/EESSI/cvmfs-status-page-rust/releases/download/v${version}/${package}.tar.gz.sha256"
+sha256sum -c "${package}.tar.gz.sha256"
+tar -xzf "${package}.tar.gz"
+install -m 0755 "${package}/cvmfs-status-page-rust" /path/to/bin/cvmfs-status-page-rust
+```
 
 ### Build from source
 
@@ -246,6 +283,9 @@ See [Prometheus metrics](docs/metrics.md) for the metric families, labels, statu
 ## Release Process
 
 Releases are created automatically by GitHub Actions when a version tag is pushed.
+The release workflow verifies the tag, runs formatting, clippy, and tests, then
+builds Linux release binaries for x86_64 and aarch64 before publishing the
+GitHub Release.
 
 1. Update `version` in `Cargo.toml`.
 2. Move the relevant entries in `CHANGELOG.md` from `Unreleased` to a new
@@ -258,7 +298,8 @@ git tag -a vx.y.z -m "Release vx.y.z"
 git push origin vx.y.z
 ```
 
-The release workflow verifies that the tag matches `Cargo.toml`, extracts the
-release notes from `CHANGELOG.md`, runs checks and tests, builds the
-`x86_64-unknown-linux-gnu` binary, and publishes a GitHub release with a tarball
-and SHA-256 checksum.
+5. Confirm that the release contains these assets:
+   - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-gnu.tar.gz`
+   - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-gnu.tar.gz.sha256`
+   - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-gnu.tar.gz`
+   - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-gnu.tar.gz.sha256`
