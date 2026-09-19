@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Updated `quinn-proto` to 0.11.18, addressing remote memory exhaustion from
+  unbounded out-of-order stream reassembly (fixed upstream in 0.11.15).
+
 ### Changed
 
 - Updated Rust dependencies, including Tera 2.4 for HTML rendering.
