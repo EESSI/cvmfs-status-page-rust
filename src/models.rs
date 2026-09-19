@@ -480,6 +480,11 @@ impl StatusManager {
             .iter()
             .filter_map(ScrapedServer::as_populated_server)
             .find(|server| server.server_type == ServerType::Stratum0);
+        if let (Some(tracker), Some(stratum0)) = (replication.as_deref_mut(), stratum0) {
+            for repo in &stratum0.repositories {
+                tracker.observe_stratum0(&repo.name, repo.revision());
+            }
+        }
         let servers: Vec<Server> = scraped_servers
             .iter()
             .map(|server| match server {
@@ -489,12 +494,11 @@ impl StatusManager {
                         .iter()
                         .map(|repo| {
                             let replication_grace = if server.server_type == ServerType::Stratum1 {
-                                replication.as_deref_mut().and_then(|tracker| {
+                                replication.as_deref().and_then(|tracker| {
                                     let reference = stratum0.and_then(|s0| {
                                         s0.repositories.iter().find(|r| r.name == repo.name)
                                     });
-                                    tracker.observe(
-                                        server.hostname.to_str(),
+                                    tracker.grace_for(
                                         &repo.name,
                                         repo.revision(),
                                         reference.map(|r| r.revision()),

@@ -217,7 +217,7 @@ fn status_manager_with_replication(
         let with_grace = || -> Result<StatusManager> {
             let mut tracker = ReplicationTracker::load(&path, grace_seconds, now)?;
             let manager = StatusManager::new(scraped_servers, Some(&mut tracker));
-            // Publish grace-adjusted health only after the timer has been saved.
+            // Publish grace-adjusted health only after revision observations are saved.
             tracker.save(&path)?;
             Ok(manager)
         };
@@ -1017,20 +1017,103 @@ mod integration_helpers_tests {
             .is_none());
     }
 
-    #[test]
-    fn repeated_publications_and_partial_progress_do_not_restart_grace() {
+    #[parameterized(
+        stuck = { 100, 1600, Status::FAILED, None },
+        caught_up_to_first = { 101, 1600, Status::OK, Some(480) },
+        at_second_deadline = { 101, 2080, Status::WARNING, None }
+    )]
+    fn oldest_missing_revision_controls_grace(
+        s1: i32,
+        now: i64,
+        expected: Status,
+        remaining: Option<u64>,
+    ) {
         let dir = tempfile::tempdir().unwrap();
-        status_manager_with_replication(&revision_pair(11, 10), dir.path(), 600, 1000);
+        status_manager_with_replication(&revision_pair(101, 100), dir.path(), 600, 1000);
+        status_manager_with_replication(&revision_pair(102, 100), dir.path(), 600, 1480);
         let manager =
-            status_manager_with_replication(&revision_pair(13, 11), dir.path(), 600, 1599);
+            status_manager_with_replication(&revision_pair(102, s1), dir.path(), 600, now);
+        assert_eq!(manager.servers[1].status, expected);
+        let grace = manager.servers[1].repositories[0]
+            .replication_grace
+            .as_ref();
+        assert_eq!(grace.map(|g| g.remaining_seconds), remaining);
+        if let Some(grace) = grace {
+            assert_eq!(grace.oldest_missing_revision, 102);
+            assert_eq!(grace.first_observed_at, 1480);
+        }
+    }
+
+    #[test]
+    fn continuous_publishing_allows_progress_without_full_catchup() {
+        let dir = tempfile::tempdir().unwrap();
+        for offset in 0..20 {
+            let manager = status_manager_with_replication(
+                &revision_pair(101 + offset, 100 + offset),
+                dir.path(),
+                600,
+                1000 + i64::from(offset) * 480,
+            );
+            assert_eq!(manager.servers[1].status, Status::OK);
+            assert_eq!(
+                manager.servers[1].repositories[0]
+                    .replication_grace
+                    .as_ref()
+                    .unwrap()
+                    .remaining_seconds,
+                600
+            );
+        }
+    }
+
+    #[test]
+    fn skipped_revisions_share_the_next_observation_deadline() {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(101, 100), dir.path(), 600, 1000);
+        status_manager_with_replication(&revision_pair(104, 101), dir.path(), 600, 1480);
+        let manager =
+            status_manager_with_replication(&revision_pair(105, 102), dir.path(), 600, 1600);
         let grace = manager.servers[1].repositories[0]
             .replication_grace
             .as_ref()
             .unwrap();
-        assert_eq!(grace.first_observed_behind, 1000);
-        assert_eq!(grace.remaining_seconds, 1);
+        assert_eq!(grace.oldest_missing_revision, 103);
+        assert_eq!(grace.first_observed_at, 1480);
+        assert_eq!(grace.remaining_seconds, 480);
         let manager =
-            status_manager_with_replication(&revision_pair(14, 12), dir.path(), 600, 1600);
+            status_manager_with_replication(&revision_pair(106, 103), dir.path(), 600, 2080);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+    }
+
+    #[test]
+    fn s1_progress_does_not_restart_a_known_revisions_deadline() {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(101, 100), dir.path(), 600, 1000);
+        status_manager_with_replication(&revision_pair(102, 100), dir.path(), 600, 1480);
+        let manager =
+            status_manager_with_replication(&revision_pair(103, 101), dir.path(), 600, 2080);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+    }
+
+    #[parameterized(caught_up = { false }, unavailable = { true })]
+    fn s0_deadlines_are_recorded_even_without_a_lagging_s1(unavailable: bool) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut scraped = revision_pair(101, 101);
+        if unavailable {
+            scraped[1] = failed_server("s1.example.org", ServerType::Stratum1);
+        }
+        status_manager_with_replication(&scraped, dir.path(), 600, 1000);
+        let manager =
+            status_manager_with_replication(&revision_pair(102, 100), dir.path(), 600, 1600);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+    }
+
+    #[test]
+    fn s0_rollback_does_not_renew_an_older_revision() {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(104, 100), dir.path(), 600, 1000);
+        let manager =
+            status_manager_with_replication(&revision_pair(102, 100), dir.path(), 600, 1600);
         assert_eq!(manager.servers[1].status, Status::FAILED);
     }
 
@@ -1045,12 +1128,12 @@ mod integration_helpers_tests {
             .replication_grace
             .as_ref()
             .unwrap();
-        assert_eq!(grace.first_observed_behind, 2000);
+        assert_eq!(grace.first_observed_at, 2000);
         assert_eq!(grace.remaining_seconds, 600);
     }
 
     #[test]
-    fn timers_are_independent_for_each_server_and_repository() {
+    fn repositories_have_separate_deadlines_and_new_s1s_share_existing_deadlines() {
         let dir = tempfile::tempdir().unwrap();
         status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1000);
         let scraped = vec![
@@ -1074,7 +1157,7 @@ mod integration_helpers_tests {
         assert_eq!(manager.servers[1].status, Status::FAILED);
         assert_eq!(manager.servers[1].repositories[0].status, Status::FAILED);
         assert_eq!(manager.servers[1].repositories[1].status, Status::OK);
-        assert_eq!(manager.servers[2].status, Status::OK);
+        assert_eq!(manager.servers[2].status, Status::FAILED);
     }
 
     #[parameterized(s0 = { ServerType::Stratum0 }, s1 = { ServerType::Stratum1 })]
@@ -1135,7 +1218,7 @@ mod integration_helpers_tests {
     #[parameterized(
         corrupt = { "not json" },
         missing_fields = { "{}" },
-        unsupported_version = { r#"{"version":2,"lag_since":{}}"# }
+        unsupported_version = { r#"{"version":3,"repositories":{}}"# }
     )]
     fn invalid_state_uses_immediate_checks_without_overwriting_state(contents: &str) {
         let dir = tempfile::tempdir().unwrap();
@@ -1183,6 +1266,8 @@ mod integration_helpers_tests {
         assert_eq!(repo["revision"], 10);
         assert_eq!(repo["replication_grace"]["revisions_behind"], 2);
         assert_eq!(repo["replication_grace"]["remaining_seconds"], 600);
+        assert_eq!(repo["replication_grace"]["oldest_missing_revision"], 11);
+        assert_eq!(repo["replication_grace"]["first_observed_at"], 1000);
         let mut context = tera::Context::new();
         context.insert("data", &data);
         let html = templating::render_template("status.html", &context).unwrap();
