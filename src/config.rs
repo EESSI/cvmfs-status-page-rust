@@ -27,6 +27,10 @@ fn scrape_only_explicit_repositories() -> bool {
     false
 }
 
+fn default_replication_grace_seconds() -> u64 {
+    600
+}
+
 fn default_history_enabled() -> bool {
     true
 }
@@ -66,6 +70,8 @@ pub struct ConfigFile {
     pub repositories: Vec<String>,
     #[serde(default = "scrape_only_explicit_repositories")]
     pub limit_scraping_to_repositories: bool,
+    #[serde(default = "default_replication_grace_seconds")]
+    pub replication_grace_seconds: u64,
     pub ignored_repositories: Vec<String>,
     pub rules: Vec<Rule>,
     #[serde(default)]
@@ -218,6 +224,34 @@ fn read_config(filename: &str) -> RwLock<ConfigFile> {
 mod tests {
     use super::*;
     use cvmfs_server_scraper::{Hostname, ServerType};
+    use yare::parameterized;
+
+    #[parameterized(
+        omitted = { None, 600 },
+        disabled = { Some(0), 0 },
+        configured = { Some(120), 120 }
+    )]
+    fn replication_grace_configuration(value: Option<u64>, expected: u64) {
+        let mut config: serde_json::Value =
+            serde_json::from_str(include_str!("../config.json")).unwrap();
+        config
+            .as_object_mut()
+            .unwrap()
+            .remove("replication_grace_seconds");
+        if let Some(value) = value {
+            config["replication_grace_seconds"] = value.into();
+        }
+        let config: ConfigFile = serde_json::from_value(config).unwrap();
+        assert_eq!(config.replication_grace_seconds, expected);
+    }
+
+    #[parameterized(negative = { -1.0 }, fractional = { 1.5 })]
+    fn replication_grace_rejects_invalid_seconds(value: f64) {
+        let mut config: serde_json::Value =
+            serde_json::from_str(include_str!("../config.json")).unwrap();
+        config["replication_grace_seconds"] = value.into();
+        assert!(serde_json::from_value::<ConfigFile>(config).is_err());
+    }
 
     #[test]
     fn test_config_validation_cvmfs_without_repos() {
@@ -238,6 +272,7 @@ mod tests {
             ignored_repositories: vec![],
             rules: vec![],
             limit_scraping_to_repositories: false,
+            replication_grace_seconds: default_replication_grace_seconds(),
             history: HistorySection::default(),
             external_metrics: None,
         };
@@ -277,6 +312,7 @@ mod tests {
             ignored_repositories: vec![],
             rules: vec![],
             limit_scraping_to_repositories: false,
+            replication_grace_seconds: default_replication_grace_seconds(),
             history: HistorySection::default(),
             external_metrics: None,
         };

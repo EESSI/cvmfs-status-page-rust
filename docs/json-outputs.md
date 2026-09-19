@@ -19,6 +19,34 @@ Top-level fields include:
 
 When history is available, each enriched server can include `uptime` and `incidents_90d`.
 
+During the replication grace period, a lagging Stratum 1 repository counts as
+`OK`. Its entry in `servers_enriched[].repositories[]` includes an optional
+`replication_grace` object:
+
+```json
+{
+  "oldest_missing_revision": 101,
+  "first_observed_at": 1790000000,
+  "remaining_seconds": 480,
+  "revisions_behind": 2
+}
+```
+
+`oldest_missing_revision` is the first revision above the S1's current revision.
+`first_observed_at` is the Unix timestamp in seconds when the generator first saw
+that revision or a higher one on S0. Skipped revisions share the next observed S0
+revision's time. `remaining_seconds` measures time until that revision's deadline;
+catching up to it can move an S1 to a newer deadline without restarting any clock.
+The object is omitted when grace is inactive or expired. Actual `revision` values
+are retained. Server rows in `servers[]` and `stratum1.servers[]` also include an
+optional `replication_details` list of "Catching up" messages for the HTML table.
+
+`replication-state.json` is internal revision observation state, separate from
+public status and history outputs. It is persisted even when history collection
+is disabled. Version 2 stores active revision observations and an expired revision
+boundary per repository. Version 1 timer files migrate automatically, retaining
+the earliest known lag per repository for the first S0 observation after migration.
+
 ## `history.json`
 
 `history.json` is the public derived history summary. It is written when history is enabled and history processing succeeds. The filename is fixed.

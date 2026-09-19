@@ -72,7 +72,13 @@
 
                         {% for server in data.stratum1.servers|sort(attribute="name") %}
                         <tr>
-                            <td class="main">{{ server.name }}</td>
+                            <td class="main">{{ server.name }}
+                                {% if server.replication_details %}
+                                {% for detail in server.replication_details %}
+                                <div class="muted">{{ detail }}</div>
+                                {% endfor %}
+                                {% endif %}
+                            </td>
                             <td class="updates"><span class="{{ server.update_class }}"></span></td>
                             <td class="geoapi"><span class="{{ server.geoapi_class }}"></span></td>
                         </tr>

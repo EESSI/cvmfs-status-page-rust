@@ -178,6 +178,59 @@ If the token env var is missing or empty, or Grafana is unreachable, the trends 
 
 For servers that are set to or detected as CVMFS, the scraper will scrape the union of the detected and configurations explicitly stated repositories.
 
+## Replication grace period
+
+Stratum 1 replicas get a 10-minute grace period when their repository revision is
+lower than Stratum 0's. Configure the duration in seconds at the top level of
+`config.json`:
+
+```json
+"replication_grace_seconds": 600
+```
+
+Omitting the setting defaults to `600`; set it to `0` to restore immediate
+revision checks. During grace, the repository counts as `OK` for server health,
+status rules, and status metrics. The Stratum 1 table shows "Catching up", the
+revision gap, and remaining grace time. JSON includes the same information in
+`servers[].replication_details` and structured `replication_grace` fields under
+`servers_enriched[].repositories[]`. Actual revisions and lag metrics are retained.
+
+Each S0 repository revision gets a deadline when the generator first observes it,
+even when S1s are caught up or unreachable. An S1 uses the deadline of the oldest
+revision it still lacks. New S0 publications never extend older deadlines; S1
+progress moves it to the next missing revision's existing deadline.
+
+For example, revision 101 observed at 12:00 has a 12:10 deadline, and revision 102
+observed at 12:08 has a 12:18 deadline. At 12:10, an S1 still on 100 fails, while
+an S1 on 101 remains within grace until 12:18. At expiry, the existing revision-gap
+thresholds apply: one behind is `WARNING`; more than one is `FAILED`.
+
+Revisions skipped between scrapes share the first observation of the next visible
+S0 revision. These times are observation times, not publication timestamps. Scrape
+failures, S1s ahead of S0, sync servers, and peer comparisons when S0 is unavailable
+continue to use the existing checks without grace. Missing scrape results do not
+renew deadlines, and newly added S1s share the known revision deadlines.
+
+Revision observations are atomically saved to `replication-state.json` in the
+destination directory, independently of history collection. Preserve the file
+between runs: deleting it or changing destinations starts fresh observations.
+Run only one generator at a time per destination. If the state
+cannot be read or saved, the generator logs a warning and uses immediate revision
+checks for that run. Invalid state is preserved for inspection. Setting grace to
+`0` skips state-file access. Changes in status are visible on the next scrape.
+
+Expired observations are compacted into a revision boundary so the state file
+does not grow with the full publication history. Those revisions remain overdue
+even if the grace duration is later increased. Version 1 state from earlier PR
+builds migrates automatically: each repository's earliest recorded lag time is
+assigned to its first S0 revision observed after migration, preserving old lag
+conservatively until S1s catch up to that revision.
+
+Existing custom templates continue to work. To display the new "Catching up"
+details in a copied template, apply the corresponding change from
+`templates/status.html`; `--force-resource-creation` replaces copied templates and
+resources with the bundled versions, including any local customizations.
+
 ## Condition Evaluation for Status
 
 There are four supported status conditions that are evaluated:

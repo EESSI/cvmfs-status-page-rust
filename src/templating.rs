@@ -81,6 +81,8 @@ pub struct ServerStatus {
     pub metadata: Option<ServerMetadata>,
     pub update_class: String,
     pub geoapi_class: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replication_details: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -169,6 +171,7 @@ mod tests {
             metadata: None,
             update_class: update_class.to_string(),
             geoapi_class: geoapi_class.to_string(),
+            replication_details: Vec::new(),
         };
 
         let serialized = serde_json::to_string(&status)?;
