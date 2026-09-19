@@ -29,6 +29,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check installer
+        run: |
+          sh -n scripts/install.sh
+          shellcheck scripts/install.sh
+          python3 tests/test_install.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:

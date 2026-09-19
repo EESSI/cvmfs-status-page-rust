@@ -142,7 +142,7 @@ staged="$(mktemp "${install_dir%/}/.${binary_name}.tmp.XXXXXX")"
 cp "${tmpdir}/${package}/${binary_name}" "$staged"
 chmod 0755 "$staged"
 
-staged_version="$("$staged" --version 2>/dev/null || true)"
+staged_version="$("$staged" --version)" || die "downloaded binary failed to report its version"
 case "$staged_version" in
     "${binary_name} ${version}") ;;
     *)
@@ -150,6 +150,6 @@ case "$staged_version" in
         ;;
 esac
 
-mv "$staged" "$destination"
+mv -T -- "$staged" "$destination"
 
 echo "Installed ${binary_name} ${version} to ${destination}"
