@@ -10,7 +10,10 @@ use tera::Tera;
 use crate::models::Status;
 
 pub fn init_templates() -> Result<Tera> {
-    Tera::new("templates/*.html").context("Failed to initialize Tera templates")
+    let mut tera = Tera::new();
+    tera.load_from_glob("templates/*.html")
+        .context("Failed to initialize Tera templates")?;
+    Ok(tera)
 }
 
 pub fn render_template(template_name: &str, context: &tera::Context) -> Result<String> {
@@ -207,6 +210,19 @@ mod tests {
     #[test]
     fn test_templates_parse() -> Result<()> {
         init_templates()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_html_templates_escape_context_values() -> Result<()> {
+        let mut context = tera::Context::new();
+        context.insert("title", "<script>alert(1)</script>");
+        context.insert("asset_base_url", "");
+
+        let html = render_template("_header.html", &context)?;
+
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;"));
+        assert!(!html.contains("<script>"));
         Ok(())
     }
 

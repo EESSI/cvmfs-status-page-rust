@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Updated Rust dependencies, including Tera 2.4 for HTML rendering.
+  **Breaking for custom templates:** migrate Tera 1 macros, renamed or removed
+  filters/tests, and changed syntax using the
+  [Tera 2 migration guide](https://github.com/Keats/tera/blob/master/MIGRATION.md).
+  The bundled templates require no changes.
 - Configurable Stratum 1 replication grace period, defaulting to 600 seconds,
   with persisted deadlines per S0 repository revision. Each S1 uses its oldest
   missing revision's deadline, allowing progress during continuous publishing
