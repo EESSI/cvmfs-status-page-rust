@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use cvmfs_server_scraper::ServerMetadata;
 use log::{info, trace};
 use serde::Serialize;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 use tempfile::NamedTempFile;
 use tera::Tera;
@@ -11,9 +11,30 @@ use crate::models::Status;
 
 pub fn init_templates() -> Result<Tera> {
     let mut tera = Tera::new();
+    tera.set_escape_fn(escape_html);
     tera.load_from_glob("templates/*.html")
         .context("Failed to initialize Tera templates")?;
     Ok(tera)
+}
+
+// Preserve Tera 1's HTML output, including hex entities for apostrophes and slashes.
+fn escape_html(input: &str, output: &mut dyn Write) -> io::Result<()> {
+    let mut start = 0;
+    for (offset, character) in input.char_indices() {
+        let escaped = match character {
+            '&' => "&amp;",
+            '<' => "&lt;",
+            '>' => "&gt;",
+            '"' => "&quot;",
+            '\'' => "&#x27;",
+            '/' => "&#x2F;",
+            _ => continue,
+        };
+        output.write_all(&input.as_bytes()[start..offset])?;
+        output.write_all(escaped.as_bytes())?;
+        start = offset + character.len_utf8();
+    }
+    output.write_all(&input.as_bytes()[start..])
 }
 
 pub fn render_template(template_name: &str, context: &tera::Context) -> Result<String> {
@@ -213,16 +234,20 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_html_templates_escape_context_values() -> Result<()> {
+    #[parameterized(
+        script = { "<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;&#x2F;script&gt;" },
+        entities = { "&<>\"'/", "&amp;&lt;&gt;&quot;&#x27;&#x2F;" },
+        unicode = { "Å/雪", "Å&#x2F;雪" },
+        literal_entity = { "&lt;", "&amp;lt;" }
+    )]
+    fn test_html_templates_escape_context_values(input: &str, expected: &str) -> Result<()> {
         let mut context = tera::Context::new();
-        context.insert("title", "<script>alert(1)</script>");
+        context.insert("title", input);
         context.insert("asset_base_url", "");
 
         let html = render_template("_header.html", &context)?;
 
-        assert!(html.contains("&lt;script&gt;alert(1)&lt;"));
-        assert!(!html.contains("<script>"));
+        assert!(html.contains(&format!("<h1 class=\"content-left\">{expected}</h1>")));
         Ok(())
     }
 

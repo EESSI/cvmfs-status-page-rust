@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated Rust dependencies, including Tera 2.4 for HTML rendering.
+  Preserved Tera 1's HTML escaping, including apostrophes and forward slashes.
   **Breaking for custom templates:** migrate Tera 1 macros, renamed or removed
   filters/tests, and changed syntax using the
   [Tera 2 migration guide](https://github.com/Keats/tera/blob/master/MIGRATION.md).

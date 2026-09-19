@@ -54,6 +54,26 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets --all-features --locked
 
+      # Pin pre-migration main so this remains an independent reference after merging.
+      - name: Checkout HTML reference
+        uses: actions/checkout@v4
+        with:
+          ref: bc44664b95cd2a2a9d25fa9670b6cfdfbc3dd20a
+          path: .html-reference
+          persist-credentials: false
+
+      - name: Build HTML reference
+        working-directory: .html-reference
+        run: cargo build --locked --target-dir ../target/html-reference
+
+      - name: Compare HTML with pre-migration main
+        run: |
+          cargo build --locked
+          python3 tests/test_html_output.py \
+            --reference-root .html-reference \
+            --reference-binary target/html-reference/debug/cvmfs-status-page-rust \
+            --candidate-binary target/debug/cvmfs-status-page-rust
+
   pr-binary:
     name: Build PR binary
     runs-on: ubuntu-latest
