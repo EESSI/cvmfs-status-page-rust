@@ -19,6 +19,26 @@ Top-level fields include:
 
 When history is available, each enriched server can include `uptime` and `incidents_90d`.
 
+During the replication grace period, a lagging Stratum 1 repository counts as
+`OK`. Its entry in `servers_enriched[].repositories[]` includes an optional
+`replication_grace` object:
+
+```json
+{
+  "first_observed_behind": 1790000000,
+  "remaining_seconds": 480,
+  "revisions_behind": 2
+}
+```
+
+`first_observed_behind` is a Unix timestamp in seconds. The object is omitted when
+grace is inactive or expired. Actual `revision` values are retained. Server rows
+in `servers[]` and `stratum1.servers[]` also include `replication_details`, an
+optional list of human-readable "Catching up" messages for the HTML table.
+
+`replication-state.json` is internal timer state, separate from public status and
+history outputs. It is persisted even when history collection is disabled.
+
 ## `history.json`
 
 `history.json` is the public derived history summary. It is written when history is enabled and history processing succeeds. The filename is fixed.

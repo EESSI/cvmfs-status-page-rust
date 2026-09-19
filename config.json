@@ -33,6 +33,7 @@
         "riscv.eessi.io"
     ],
     "limit_scraping_to_repositories": false,
+    "replication_grace_seconds": 600,
     "ignored_repositories": [
         "test.eessi.io"
     ],

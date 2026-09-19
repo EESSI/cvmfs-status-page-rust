@@ -178,6 +178,44 @@ If the token env var is missing or empty, or Grafana is unreachable, the trends 
 
 For servers that are set to or detected as CVMFS, the scraper will scrape the union of the detected and configurations explicitly stated repositories.
 
+## Replication grace period
+
+Stratum 1 replicas get a 10-minute grace period when their repository revision is
+lower than Stratum 0's. Configure the duration in seconds at the top level of
+`config.json`:
+
+```json
+"replication_grace_seconds": 600
+```
+
+Omitting the setting defaults to `600`; set it to `0` to restore immediate
+revision checks. During grace, the repository counts as `OK` for server health,
+status rules, and status metrics. The Stratum 1 table shows "Catching up", the
+revision gap, and remaining grace time. JSON includes the same information in
+`servers[].replication_details` and structured `replication_grace` fields under
+`servers_enriched[].repositories[]`. Actual revisions and lag metrics are retained.
+
+Each Stratum 1/repository timer starts when the generator first observes it behind
+Stratum 0. Further S0 publications and partial S1 progress do not restart it. A
+successful observation at or above the S0 revision clears the timer. At expiry,
+one revision behind becomes `WARNING`; more than one becomes `FAILED`. Scrape
+failures, S1s ahead of S0, sync servers, and peer comparisons when S0 is unavailable
+continue to use the existing checks without grace. Timers survive missing scrape
+results, so outages do not grant a fresh grace period.
+
+Timers are atomically saved to `replication-state.json` in the destination
+directory, independently of history collection. Preserve this file between runs;
+deleting it or changing the destination starts fresh timers. As with the other
+generated files, run only one generator at a time per destination. If the state
+cannot be read or saved, the generator logs a warning and uses immediate revision
+checks for that run. Invalid state is preserved for inspection. Setting grace to
+`0` skips state-file access. Changes in status are visible on the next scrape.
+
+Existing custom templates continue to work. To display the new "Catching up"
+details in a copied template, apply the corresponding change from
+`templates/status.html`; `--force-resource-creation` replaces copied templates and
+resources with the bundled versions, including any local customizations.
+
 ## Condition Evaluation for Status
 
 There are four supported status conditions that are evaluated:

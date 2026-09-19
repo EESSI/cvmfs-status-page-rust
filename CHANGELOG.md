@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Configurable Stratum 1 replication grace period, defaulting to 600 seconds,
+  with persisted timers per server/repository and "Catching up" details in HTML
+  and JSON. Set `replication_grace_seconds` to `0` for immediate revision checks.
+
 ## [0.0.1] - 2026-06-18
 
 ### Added

@@ -12,10 +12,11 @@ mod external;
 mod history;
 mod models;
 mod prometheus;
+mod replication;
 mod templating;
 
 use config::{get_config_manager, init_config};
-use cvmfs_server_scraper::{Scraper, ScraperCommon, ServerType};
+use cvmfs_server_scraper::{ScrapedServer, Scraper, ScraperCommon, ServerType};
 use dependencies::{atomic_write, populate};
 use derived::DerivedMetrics;
 use external::ExternalSnapshot;
@@ -25,6 +26,7 @@ use models::{
     StatusManager, StatusPageData, StratumStatus, ToEESSILabel, TrendsPageData,
 };
 use prometheus::MetricsBuilder;
+use replication::ReplicationTracker;
 use templating::{render_template_to_file, RepoStatus, StatusInfo};
 
 #[derive(Parser, Debug)]
@@ -116,7 +118,7 @@ async fn main() -> Result<()> {
     validate_output_path(&args.trends_output_file)?;
     validate_output_path(&args.trends_json_output_file)?;
 
-    let status_manager = create_status_manager(config_manager).await?;
+    let status_manager = create_status_manager(config_manager, &args.destination).await?;
     let mut status_page_data = generate_status_page_data(config_manager, &status_manager)?;
     apply_urls(&args, &mut status_page_data);
 
@@ -165,7 +167,10 @@ fn init_and_get_config(args: &Opt) -> Result<&config::ConfigManager> {
     Ok(get_config_manager())
 }
 
-async fn create_status_manager(config_manager: &config::ConfigManager) -> Result<StatusManager> {
+async fn create_status_manager(
+    config_manager: &config::ConfigManager,
+    destination: &Path,
+) -> Result<StatusManager> {
     let config = config_manager.get_config();
     let mut servers = vec![];
 
@@ -193,7 +198,37 @@ async fn create_status_manager(config_manager: &config::ConfigManager) -> Result
         .scrape()
         .await; // Perform the scrape, return servers.
 
-    Ok(StatusManager::new(scraped_servers))
+    Ok(status_manager_with_replication(
+        &scraped_servers,
+        destination,
+        config.replication_grace_seconds,
+        Utc::now().timestamp(),
+    ))
+}
+
+fn status_manager_with_replication(
+    scraped_servers: &[ScrapedServer],
+    destination: &Path,
+    grace_seconds: u64,
+    now: i64,
+) -> StatusManager {
+    if grace_seconds > 0 {
+        let path = destination.join("replication-state.json");
+        let with_grace = || -> Result<StatusManager> {
+            let mut tracker = ReplicationTracker::load(&path, grace_seconds, now)?;
+            let manager = StatusManager::new(scraped_servers, Some(&mut tracker));
+            // Publish grace-adjusted health only after the timer has been saved.
+            tracker.save(&path)?;
+            Ok(manager)
+        };
+        match with_grace() {
+            Ok(manager) => return manager,
+            Err(err) => {
+                warn!("replication grace unavailable; using immediate revision checks: {err:#}")
+            }
+        }
+    }
+    StatusManager::new(scraped_servers, None)
 }
 
 fn generate_status_page_data(
@@ -872,6 +907,298 @@ fn path_to_str(path: &Path) -> Result<&str> {
 #[cfg(test)]
 mod integration_helpers_tests {
     use super::*;
+    use cvmfs_server_scraper::{
+        FailedServer, GeoapiServerQuery, Hostname, Manifest, ManifestError, MaybeRfc2822DateTime,
+        PopulatedRepositoryOrReplica, PopulatedServer, ServerBackendType, ServerMetadata,
+    };
+    use std::fs;
+    use yare::parameterized;
+
+    fn populated_server(
+        hostname: &str,
+        server_type: ServerType,
+        revisions: &[(&str, i32)],
+    ) -> ScrapedServer {
+        let hostname: Hostname = hostname.parse().unwrap();
+        ScrapedServer::Populated(Box::new(PopulatedServer {
+            server_type,
+            backend_type: ServerBackendType::CVMFS,
+            backend_detected: ServerBackendType::CVMFS,
+            hostname: hostname.clone(),
+            repositories: revisions
+                .iter()
+                .map(|(name, revision)| {
+                    let manifest: Manifest = serde_json::from_str(
+                        &serde_json::json!({
+                            "c": "00", "b": 1, "a": false, "r": "00", "x": "00",
+                            "g": false, "h": "00", "t": 500, "d": 60, "s": revision,
+                            "n": name, "m": "00", "y": "00", "l": "", "signature": ""
+                        })
+                        .to_string(),
+                    )
+                    .unwrap();
+                    PopulatedRepositoryOrReplica {
+                        name: name.to_string(),
+                        manifest,
+                        last_snapshot: None,
+                        last_gc: None,
+                    }
+                })
+                .collect(),
+            metadata: ServerMetadata {
+                schema_version: None,
+                cvmfs_version: None,
+                last_geodb_update: MaybeRfc2822DateTime(None),
+                os_version_id: None,
+                os_pretty_name: None,
+                os_id: None,
+                administrator: None,
+                email: None,
+                organisation: None,
+                custom: None,
+            },
+            geoapi: GeoapiServerQuery {
+                hostname,
+                geoapi_hosts: vec![],
+                response: vec![],
+            },
+        }))
+    }
+
+    fn failed_server(hostname: &str, server_type: ServerType) -> ScrapedServer {
+        ScrapedServer::Failed(FailedServer {
+            hostname: hostname.parse().unwrap(),
+            server_type,
+            backend_type: ServerBackendType::CVMFS,
+            error: ManifestError::MissingField('S').into(),
+        })
+    }
+
+    fn revision_pair(s0: i32, s1: i32) -> Vec<ScrapedServer> {
+        vec![
+            populated_server("s0.example.org", ServerType::Stratum0, &[("repo", s0)]),
+            populated_server("s1.example.org", ServerType::Stratum1, &[("repo", s1)]),
+        ]
+    }
+
+    #[parameterized(
+        one_behind = { 11, 10, 600, Status::OK },
+        many_behind = { 20, 10, 600, Status::OK },
+        equal = { 10, 10, 600, Status::OK },
+        one_ahead = { 10, 11, 600, Status::WARNING },
+        many_ahead = { 10, 20, 600, Status::FAILED },
+        disabled_warning = { 11, 10, 0, Status::WARNING },
+        disabled_failure = { 20, 10, 0, Status::FAILED }
+    )]
+    fn replication_grace_affects_only_replicas_behind_s0(
+        s0: i32,
+        s1: i32,
+        seconds: u64,
+        expected: Status,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let manager =
+            status_manager_with_replication(&revision_pair(s0, s1), dir.path(), seconds, 1000);
+        assert_eq!(manager.servers[1].status, expected);
+        assert_eq!(manager.servers[1].repositories[0].status_revision, expected);
+        assert_eq!(manager.servers[0].status, Status::OK);
+        assert!(!dir.path().join("history").exists());
+    }
+
+    #[parameterized(one_behind = { 11, Status::WARNING }, many_behind = { 20, Status::FAILED })]
+    fn grace_expiry_restores_existing_severity(s0: i32, expected: Status) {
+        let dir = tempfile::tempdir().unwrap();
+        let scraped = revision_pair(s0, 10);
+        status_manager_with_replication(&scraped, dir.path(), 600, 1000);
+        let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1600);
+        assert_eq!(manager.servers[1].status, expected);
+        assert!(manager.servers[1].repositories[0]
+            .replication_grace
+            .is_none());
+    }
+
+    #[test]
+    fn repeated_publications_and_partial_progress_do_not_restart_grace() {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(11, 10), dir.path(), 600, 1000);
+        let manager =
+            status_manager_with_replication(&revision_pair(13, 11), dir.path(), 600, 1599);
+        let grace = manager.servers[1].repositories[0]
+            .replication_grace
+            .as_ref()
+            .unwrap();
+        assert_eq!(grace.first_observed_behind, 1000);
+        assert_eq!(grace.remaining_seconds, 1);
+        let manager =
+            status_manager_with_replication(&revision_pair(14, 12), dir.path(), 600, 1600);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+    }
+
+    #[test]
+    fn caught_up_replica_gets_fresh_grace_for_next_publication() {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(11, 10), dir.path(), 600, 1000);
+        status_manager_with_replication(&revision_pair(11, 11), dir.path(), 600, 1600);
+        let manager =
+            status_manager_with_replication(&revision_pair(12, 11), dir.path(), 600, 2000);
+        let grace = manager.servers[1].repositories[0]
+            .replication_grace
+            .as_ref()
+            .unwrap();
+        assert_eq!(grace.first_observed_behind, 2000);
+        assert_eq!(grace.remaining_seconds, 600);
+    }
+
+    #[test]
+    fn timers_are_independent_for_each_server_and_repository() {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1000);
+        let scraped = vec![
+            populated_server(
+                "s0.example.org",
+                ServerType::Stratum0,
+                &[("repo", 12), ("new-repo", 12)],
+            ),
+            populated_server(
+                "s1.example.org",
+                ServerType::Stratum1,
+                &[("repo", 10), ("new-repo", 10)],
+            ),
+            populated_server(
+                "s1-other.example.org",
+                ServerType::Stratum1,
+                &[("repo", 10)],
+            ),
+        ];
+        let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1600);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+        assert_eq!(manager.servers[1].repositories[0].status, Status::FAILED);
+        assert_eq!(manager.servers[1].repositories[1].status, Status::OK);
+        assert_eq!(manager.servers[2].status, Status::OK);
+    }
+
+    #[parameterized(s0 = { ServerType::Stratum0 }, s1 = { ServerType::Stratum1 })]
+    fn failed_scrapes_do_not_reset_timers(server_type: ServerType) {
+        let dir = tempfile::tempdir().unwrap();
+        status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1000);
+        let mut scraped = revision_pair(12, 10);
+        let index = if server_type == ServerType::Stratum0 {
+            0
+        } else {
+            1
+        };
+        let hostname = if index == 0 {
+            "s0.example.org"
+        } else {
+            "s1.example.org"
+        };
+        scraped[index] = failed_server(hostname, server_type);
+        let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1300);
+        assert_eq!(manager.servers[index].status, Status::FAILED);
+        let manager =
+            status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1600);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+    }
+
+    #[test]
+    fn peer_comparison_without_s0_has_no_grace() {
+        let dir = tempfile::tempdir().unwrap();
+        let scraped = vec![
+            populated_server("s1.example.org", ServerType::Stratum1, &[("repo", 10)]),
+            populated_server(
+                "s1-other.example.org",
+                ServerType::Stratum1,
+                &[("repo", 12)],
+            ),
+        ];
+        let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1000);
+        assert!(manager
+            .servers
+            .iter()
+            .all(|server| server.status == Status::FAILED));
+    }
+
+    #[test]
+    fn sync_servers_have_no_grace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut scraped = revision_pair(12, 10);
+        scraped.push(populated_server(
+            "sync.example.org",
+            ServerType::SyncServer,
+            &[("repo", 10)],
+        ));
+        let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1000);
+        assert_eq!(manager.servers[1].status, Status::OK);
+        assert_eq!(manager.servers[2].status, Status::FAILED);
+    }
+
+    #[parameterized(
+        corrupt = { "not json" },
+        missing_fields = { "{}" },
+        unsupported_version = { r#"{"version":2,"lag_since":{}}"# }
+    )]
+    fn invalid_state_uses_immediate_checks_without_overwriting_state(contents: &str) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("replication-state.json");
+        fs::write(&path, contents).unwrap();
+        let manager =
+            status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1000);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+        assert_eq!(fs::read_to_string(path).unwrap(), contents);
+    }
+
+    #[test]
+    fn inaccessible_state_uses_immediate_checks() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("replication-state.json")).unwrap();
+        let manager =
+            status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1000);
+        assert_eq!(manager.servers[1].status, Status::FAILED);
+    }
+
+    #[test]
+    fn grace_is_visible_in_html_json_and_aggregate_health() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager =
+            status_manager_with_replication(&revision_pair(12, 10), dir.path(), 600, 1000);
+        let mut config: config::ConfigFile =
+            serde_json::from_str(include_str!("../config.json")).unwrap();
+        config.history.enabled = false;
+        config
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == "eessi_status")
+            .unwrap()
+            .conditions = vec![config::Condition {
+            status: Status::OK,
+            when: "stratum1_ok == 1".to_string(),
+        }];
+        let config_manager = config::ConfigManager {
+            config: std::sync::RwLock::new(config),
+        };
+        let data = generate_status_page_data(&config_manager, &manager).unwrap();
+        assert_eq!(data.eessi_status.status, Status::OK);
+        let json = serde_json::to_value(&data).unwrap();
+        let repo = &json["servers_enriched"][1]["repositories"][0];
+        assert_eq!(repo["revision"], 10);
+        assert_eq!(repo["replication_grace"]["revisions_behind"], 2);
+        assert_eq!(repo["replication_grace"]["remaining_seconds"], 600);
+        let mut context = tera::Context::new();
+        context.insert("data", &data);
+        let html = templating::render_template("status.html", &context).unwrap();
+        assert!(html.contains("repo: Catching up (2 revisions behind S0; 600s grace remaining)"));
+        let args = Opt::parse_from(["test", "--destination", dir.path().to_str().unwrap()]);
+        generate_prometheus_metrics(&args, &data, &manager, &Utc::now(), None).unwrap();
+        let metrics = fs::read_to_string(dir.path().join("metrics")).unwrap();
+        assert!(metrics
+            .lines()
+            .any(|line| line.starts_with("eessi_status 0 ")));
+        assert!(metrics
+            .lines()
+            .any(|line| line.starts_with("repo_revision{")
+                && line.contains("s1.example.org")
+                && line.contains(" 10 ")));
+    }
 
     #[test]
     fn relative_urls_handle_nested_outputs() {

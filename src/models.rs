@@ -13,6 +13,7 @@ use cvmfs_server_scraper::{
 };
 
 use crate::config::{Condition, ConfigFile};
+use crate::replication::{ReplicationGrace, ReplicationTracker};
 use crate::templating::{RepoStatus, ServerStatus, StatusInfo};
 
 #[allow(clippy::upper_case_acronyms)]
@@ -243,6 +244,8 @@ pub struct ServerRepositoryEnriched {
     pub revision: i32,
     pub timestamp: i64,
     pub catalogue_size_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replication_grace: Option<ReplicationGrace>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -411,6 +414,8 @@ pub struct Repositories {
     pub status: Status,
     /// Is the revision in sync with either the stratum0 or the stratum1s?
     pub status_revision: Status,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replication_grace: Option<ReplicationGrace>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -432,6 +437,18 @@ impl Server {
             metadata: self.metadata.clone(),
             update_class: self.status.class().to_string(),
             geoapi_class: Status::OK.class().to_string(),
+            replication_details: self
+                .repositories
+                .iter()
+                .filter_map(|repo| {
+                    repo.replication_grace.as_ref().map(|grace| {
+                        format!(
+                            "{}: Catching up ({} revisions behind S0; {}s grace remaining)",
+                            repo.name, grace.revisions_behind, grace.remaining_seconds
+                        )
+                    })
+                })
+                .collect(),
         }
     }
 }
@@ -455,7 +472,14 @@ pub struct StatusManager {
 }
 
 impl StatusManager {
-    pub fn new(scraped_servers: Vec<ScrapedServer>) -> Self {
+    pub fn new(
+        scraped_servers: &[ScrapedServer],
+        mut replication: Option<&mut ReplicationTracker>,
+    ) -> Self {
+        let stratum0 = scraped_servers
+            .iter()
+            .filter_map(ScrapedServer::as_populated_server)
+            .find(|server| server.server_type == ServerType::Stratum0);
         let servers: Vec<Server> = scraped_servers
             .iter()
             .map(|server| match server {
@@ -464,14 +488,33 @@ impl StatusManager {
                         .repositories
                         .iter()
                         .map(|repo| {
-                            let status_revision =
-                                Status::get_repo_revision_status(repo, &scraped_servers);
+                            let replication_grace = if server.server_type == ServerType::Stratum1 {
+                                replication.as_deref_mut().and_then(|tracker| {
+                                    let reference = stratum0.and_then(|s0| {
+                                        s0.repositories.iter().find(|r| r.name == repo.name)
+                                    });
+                                    tracker.observe(
+                                        server.hostname.to_str(),
+                                        &repo.name,
+                                        repo.revision(),
+                                        reference.map(|r| r.revision()),
+                                    )
+                                })
+                            } else {
+                                None
+                            };
+                            let status_revision = if replication_grace.is_some() {
+                                Status::OK
+                            } else {
+                                Status::get_repo_revision_status(repo, scraped_servers)
+                            };
                             Repositories {
                                 name: repo.name.clone(),
                                 revision: repo.revision(),
                                 manifest: repo.manifest.clone(),
                                 status: status_revision,
                                 status_revision,
+                                replication_grace,
                             }
                         })
                         .collect();
@@ -643,6 +686,7 @@ impl StatusManager {
                         revision: repo.revision,
                         timestamp: repo.manifest.t,
                         catalogue_size_bytes: repo.manifest.b as u64,
+                        replication_grace: repo.replication_grace.clone(),
                     })
                     .collect(),
             })
