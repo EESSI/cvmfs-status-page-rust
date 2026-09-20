@@ -5,10 +5,17 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
+import tempfile
 
 
 APPROVAL_LABEL = "approve-output-divergence"
+CAPTURE_FILES = (
+    "summary.json", "cassette.json", "config.json", "diff.txt",
+    "reference/status.json", "reference/trends.json", "reference/metrics",
+    "candidate/status.json", "candidate/trends.json", "candidate/metrics",
+)
 
 
 def review_context(event):
@@ -46,16 +53,28 @@ def restore_capture(context, destination):
             or run["status"] != "completed"
         ):
             continue
-        subprocess.run(
-            ["gh", "run", "download", str(run_id), "--repo", repository,
-             "--name", artifact_name, "--dir", str(destination)], check=True,
-        )
-        if json.loads((destination / "context.json").read_text()) != context:
-            raise ValueError("Capture does not belong to this PR head/base")
-        summary = json.loads((destination / "summary.json").read_text())
-        if (destination / "error.txt").exists() or not summary["different"]:
-            raise ValueError("The previous run has no completed divergence to approve")
-        return
+        # Failed or cancelled runs can upload only part of a report. Inspect each
+        # artifact in isolation so skipped files cannot contaminate the capture.
+        with tempfile.TemporaryDirectory() as temporary:
+            capture = Path(temporary)
+            subprocess.run(
+                ["gh", "run", "download", str(run_id), "--repo", repository,
+                 "--name", artifact_name, "--dir", str(capture)], check=True,
+            )
+            context_path = capture / "context.json"
+            if not context_path.is_file():
+                continue
+            if json.loads(context_path.read_text()) != context:
+                raise ValueError("Capture does not belong to this PR head/base")
+            if (capture / "error.txt").exists() or any(
+                not (capture / name).is_file() for name in CAPTURE_FILES
+            ):
+                continue
+            summary = json.loads((capture / "summary.json").read_text())
+            if not summary["different"]:
+                raise ValueError("The previous run has no completed divergence to approve")
+            shutil.copytree(capture, destination, dirs_exist_ok=True)
+            return
     raise ValueError("No reviewed capture for this head/base; run live-scrape and inspect its diff first")
 
 

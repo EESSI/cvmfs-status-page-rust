@@ -19,6 +19,11 @@ from live_scrape_compare import compare, normalize_json, normalize_metrics, requ
 class UpstreamHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.server.requests += 1
+        if self.server.redirect_status and self.path.endswith(".cvmfspublished"):
+            self.send_response(self.server.redirect_status)
+            self.send_header("Location", "/manifest")
+            self.end_headers()
+            return
         body = str(self.server.requests).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
@@ -30,9 +35,10 @@ class UpstreamHandler(BaseHTTPRequestHandler):
 
 
 @contextmanager
-def upstream():
+def upstream(redirect_status=None):
     with ThreadingHTTPServer(("127.0.0.1", 0), UpstreamHandler) as server:
         server.requests = 0
+        server.redirect_status = redirect_status
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -52,6 +58,11 @@ config = json.loads(pathlib.Path(args[args.index("--configuration") + 1]).read_t
 output = pathlib.Path(args[args.index("--destination") + 1])
 output.mkdir(parents=True)
 url = "http://" + config["servers"][0]["hostname"] + "/cvmfs/repo/.cvmfspublished"
+if behavior == "no_redirects":
+    class NoRedirects(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_args, **_kwargs):
+            return None
+    urllib.request.install_opener(urllib.request.build_opener(NoRedirects()))
 revision = int(urllib.request.urlopen(url, timeout=5).read())
 if behavior == "extra_request":
     urllib.request.urlopen(url + "-unrecorded", timeout=5).read()
@@ -97,6 +108,42 @@ class LiveComparisonTests(unittest.TestCase):
             self.assertEqual(server.requests, 1)
             summary = json.loads((args.report_dir / "summary.json").read_text())
             self.assertFalse(summary["different"])
+
+    def test_redirect_chain_is_captured_and_replayed_with_upstream_offline(self):
+        for status in [301, 302, 303, 307, 308]:
+            with self.subTest(status=status):
+                with upstream(redirect_status=status) as server:
+                    args = self.arguments(server, directory=f"redirect-{status}")
+                    self.assertEqual(compare(args), 0)
+                    self.assertEqual(server.requests, 2)
+                cassette = json.loads((args.report_dir / "cassette.json").read_text())
+                original_url = f"http://127.0.0.1:{server.server_port}/cvmfs/repo/.cvmfspublished"
+                self.assertEqual(cassette["responses"][original_url]["status"], status)
+                self.assertEqual(cassette["responses"][original_url]["location"], "/manifest")
+                self.assertEqual(len(cassette["responses"]), 2)
+                args.cassette_in = args.report_dir / "cassette.json"
+                args.report_dir = self.root / f"redirect-replay-{status}"
+                self.assertEqual(compare(args), 0)
+
+    def test_approval_cannot_hide_a_candidate_that_stops_following_redirects(self):
+        with upstream(redirect_status=302) as server:
+            args = self.arguments(server, "no_redirects")
+            args.allow_divergence = True
+            with self.assertRaisesRegex(ValueError, "candidate exited"):
+                compare(args)
+            self.assertIn("HTTP Error 302", (args.report_dir / "candidate.log").read_text())
+
+    def test_replay_rejects_captures_that_flattened_redirects(self):
+        with upstream() as server:
+            args = self.arguments(server)
+            self.assertEqual(compare(args), 0)
+        args.cassette_in = args.report_dir / "cassette.json"
+        cassette = json.loads(args.cassette_in.read_text())
+        cassette["v"] = 1
+        args.cassette_in.write_text(json.dumps(cassette))
+        args.report_dir = self.root / "old-capture"
+        with self.assertRaisesRegex(ValueError, "Cassette version"):
+            compare(args)
 
     def test_approval_reuses_reviewed_capture_with_upstream_offline(self):
         with upstream() as server:
@@ -194,7 +241,7 @@ class LiveComparisonTests(unittest.TestCase):
 
     def test_approval_rejects_an_artifact_with_wrong_base_metadata(self):
         context = {"head": "a" * 40, "base": "b" * 40}
-        (self.root / "context.json").write_text(json.dumps(dict(context, base="c" * 40)))
+        files = {"context.json": json.dumps(dict(context, base="c" * 40))}
         pages = [{"artifacts": [{"id": 1, "expired": False, "workflow_run": {"id": 9}}]}]
         run = {
             "path": ".github/workflows/live-scrape.yml", "event": "pull_request",
@@ -203,10 +250,96 @@ class LiveComparisonTests(unittest.TestCase):
         with (
             patch.dict(os.environ, GITHUB_REPOSITORY="owner/repo"),
             patch("live_scrape_ci.gh_json", side_effect=[pages, run]),
-            patch("live_scrape_ci.subprocess.run"),
+            patch("live_scrape_ci.subprocess.run", side_effect=self.download_capture(files)),
         ):
             with self.assertRaisesRegex(ValueError, "does not belong"):
                 restore_capture(context, self.root)
+
+    @staticmethod
+    def download_capture(files):
+        def download(command, **_kwargs):
+            destination = Path(command[command.index("--dir") + 1])
+            for name, contents in files.items():
+                path = destination / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(contents)
+        return download
+
+    @staticmethod
+    def completed_capture(context):
+        return {
+            "context.json": json.dumps(context),
+            "summary.json": json.dumps({"different": True}),
+            "cassette.json": json.dumps({"v": 2, "hosts": ["fixture"], "responses": {}}),
+            "config.json": json.dumps({"servers": [{"hostname": "fixture"}]}),
+            "diff.txt": "reviewed difference\n",
+            **{
+                f"{kind}/{name}": "reviewed output\n"
+                for kind in ["reference", "candidate"]
+                for name in ["status.json", "trends.json", "metrics"]
+            },
+        }
+
+    @contextmanager
+    def artifact_history(self, context, captures):
+        pages = [{"artifacts": [
+            {"id": index, "expired": False, "workflow_run": {"id": index}}
+            for index in range(len(captures))
+        ]}]
+        run = {
+            "path": ".github/workflows/live-scrape.yml", "event": "pull_request",
+            "head_sha": context["head"], "status": "completed",
+        }
+
+        def download(command, **kwargs):
+            self.download_capture(captures[int(command[3])])(command, **kwargs)
+
+        with (
+            patch.dict(os.environ, GITHUB_REPOSITORY="owner/repo"),
+            patch("live_scrape_ci.gh_json", side_effect=[pages] + [run] * len(captures)),
+            patch("live_scrape_ci.subprocess.run", side_effect=download) as downloads,
+        ):
+            yield downloads
+
+    def test_approval_skips_incomplete_artifacts_without_mixing_their_files(self):
+        context = {"head": "a" * 40, "base": "b" * 40}
+        reviewed = self.completed_capture(context)
+        incomplete = {
+            "context_only": {"context.json": reviewed["context.json"]},
+            "missing_cassette": {k: v for k, v in reviewed.items() if k != "cassette.json"},
+            "missing_config": {k: v for k, v in reviewed.items() if k != "config.json"},
+            "missing_diff": {k: v for k, v in reviewed.items() if k != "diff.txt"},
+            "missing_output": {k: v for k, v in reviewed.items() if k != "candidate/metrics"},
+            "failed_comparison": dict(reviewed, **{"error.txt": "comparison failed"}),
+        }
+        for name, files in incomplete.items():
+            with self.subTest(name=name), self.artifact_history(context, [reviewed, files]) as downloads:
+                destination = self.root / name
+                restore_capture(context, destination)
+                self.assertEqual([call.args[0][3] for call in downloads.call_args_list], ["1", "0"])
+                restored = {
+                    str(path.relative_to(destination)): path.read_text()
+                    for path in destination.rglob("*") if path.is_file()
+                }
+                self.assertEqual(restored, reviewed)
+
+    def test_approval_fails_when_only_incomplete_captures_exist(self):
+        context = {"head": "a" * 40, "base": "b" * 40}
+        files = {"context.json": json.dumps(context)}
+        with self.artifact_history(context, [files]):
+            destination = self.root / "restored"
+            with self.assertRaisesRegex(ValueError, "No reviewed capture"):
+                restore_capture(context, destination)
+            self.assertFalse(destination.exists())
+
+    def test_approval_does_not_skip_a_completed_comparison_with_equal_output(self):
+        context = {"head": "a" * 40, "base": "b" * 40}
+        reviewed = self.completed_capture(context)
+        matching = dict(reviewed, **{"summary.json": json.dumps({"different": False})})
+        with self.artifact_history(context, [reviewed, matching]) as downloads:
+            with self.assertRaisesRegex(ValueError, "no completed divergence"):
+                restore_capture(context, self.root / "restored")
+            self.assertEqual(len(downloads.call_args_list), 1)
 
 
 if __name__ == "__main__":

@@ -14,10 +14,11 @@ import tempfile
 import threading
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
-from urllib.request import build_opener, ProxyHandler
+from urllib.request import build_opener, HTTPRedirectHandler, ProxyHandler
 
 
 STATUSES = {"OK", "DEGRADED", "WARNING", "FAILED", "MAINTENANCE"}
+CASSETTE_VERSION = 2
 UNORDERED_ARRAYS = {
     ("servers",), ("servers_enriched",), ("repositories",), ("repositories_enriched",),
     ("servers_enriched", "repositories"), ("servers", "replication_details"),
@@ -39,6 +40,12 @@ def request_key(url):
     return urlunsplit((parsed.scheme, parsed.netloc, "/".join(parts), parsed.query, ""))
 
 
+class PreserveRedirects(HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs):
+        # Each binary must follow the original redirect through the proxy itself.
+        return None
+
+
 class Cassette:
     def __init__(self, hosts, responses=None):
         self.hosts = set(hosts)
@@ -48,7 +55,7 @@ class Cassette:
         self.errors = []
         self.lock = threading.Lock()
         self.key_locks = {}
-        self.opener = build_opener(ProxyHandler({}))
+        self.opener = build_opener(ProxyHandler({}), PreserveRedirects())
 
     def response(self, url):
         key = request_key(url)
@@ -73,6 +80,8 @@ class Cassette:
                         "content_type": upstream.headers.get("Content-Type", "application/octet-stream"),
                         "body": base64.b64encode(upstream.read()).decode("ascii"),
                     }
+                    if (location := upstream.headers.get("Location")) is not None:
+                        result["location"] = location
             except (URLError, TimeoutError, OSError) as error:
                 # A recorded transport failure remains identical for both binaries.
                 result = {
@@ -89,13 +98,15 @@ class Cassette:
         self.errors = []
 
     def save(self, path):
-        path.write_text(json.dumps({"v": 1, "hosts": sorted(self.hosts), "responses": self.responses}, indent=2, sort_keys=True))
+        path.write_text(json.dumps({"v": CASSETTE_VERSION, "hosts": sorted(self.hosts), "responses": self.responses}, indent=2, sort_keys=True))
 
     @classmethod
     def load(cls, path, hosts):
         data = json.loads(path.read_text())
-        if data["v"] != 1 or set(data["hosts"]) != set(hosts) or not data["responses"]:
-            raise ValueError("Cassette version, hosts, or responses do not match")
+        if data["v"] != CASSETTE_VERSION:
+            raise ValueError("Cassette version is unsupported; record a fresh capture to preserve redirects")
+        if set(data["hosts"]) != set(hosts) or not data["responses"]:
+            raise ValueError("Cassette hosts or responses do not match")
         return cls(hosts, data["responses"])
 
 
@@ -106,6 +117,8 @@ class ReplayHandler(BaseHTTPRequestHandler):
             body = base64.b64decode(response["body"], validate=True)
             self.send_response(response["status"])
             self.send_header("Content-Type", response["content_type"])
+            if "location" in response:
+                self.send_header("Location", response["location"])
         except Exception as error:
             self.server.cassette.errors.append(str(error))
             body = str(error).encode()

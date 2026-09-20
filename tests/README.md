@@ -40,6 +40,9 @@ captures the reference binary's public CVMFS HTTP responses once, then replays
 those responses to the candidate. The candidate never refreshes a recorded
 response. GeoAPI's random request nonce is normalized; the host, repository, host
 ordering, and other URL components must still match.
+Redirect status codes and `Location` headers are preserved, so each binary follows
+the redirect chain itself. Redirect targets must use HTTP and a configured host;
+HTTPS and redirects outside the configured hosts fail the comparison.
 
 The comparison uses the base commit's `config.json` with history and external
 Grafana metrics disabled. Each binary starts with fresh replication state. It
@@ -62,6 +65,9 @@ still fail. A new commit invalidates approval even if the label remains attached
 review the new artifact, then remove and reapply the approval label. Other label
 events also require fresh approval when differences remain. To rerun a fresh live
 capture, remove and reapply `live-scrape`. Removing that label disables the check.
+Approval restoration skips incomplete artifacts from failed or cancelled runs,
+using the newest complete comparison for the same commits. Each artifact is
+checked separately so files from failed runs cannot contaminate the saved capture.
 
 The workflow uses read-only repository permissions and the ordinary
 `pull_request` event, explicitly checking out the event's merge and base SHAs.
@@ -88,6 +94,9 @@ To replay a saved capture, add `--cassette-in /path/to/artifact/cassette.json`.
 Keep the artifact's `config.json` alongside it. `--allow-divergence` permits output
 differences during an explicitly reviewed local replay. Exit codes are `0` for
 equal or approved output, `2` for unapproved differences, and `1` for errors.
+Captures use format version 2 to preserve redirect chains. Version 1 captures
+flattened redirects and cannot be upgraded reliably; record a fresh capture
+without `--cassette-in` before replaying with this version.
 
 The deterministic tooling tests run on every PR, without public network access:
 
