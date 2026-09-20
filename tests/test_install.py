@@ -12,7 +12,7 @@ import unittest
 
 INSTALLER = Path(__file__).resolve().parents[1] / "scripts" / "install.sh"
 BINARY = "cvmfs-status-page-rust"
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 
 class InstallerTests(unittest.TestCase):
@@ -59,8 +59,17 @@ esac
             command.write_text(content)
             command.chmod(0o755)
 
-    def make_release(self, reported_version=VERSION, exit_status=0):
-        package = f"{BINARY}-{VERSION}-{self.env['TEST_ARCH']}-unknown-linux-gnu"
+    def make_release(
+        self,
+        reported_version=None,
+        exit_status=0,
+        *,
+        version=VERSION,
+        target="x86_64-unknown-linux-musl",
+    ):
+        if reported_version is None:
+            reported_version = version
+        package = f"{BINARY}-{version}-{target}"
         binary = (
             "#!/bin/sh\n"
             '[ "$#" -eq 1 ] && [ "$1" = --version ] || exit 2\n'
@@ -101,14 +110,14 @@ esac
         )
         return result
 
-    def assert_installed(self, result):
+    def assert_installed(self, result, version=VERSION):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(self.destination.is_file())
         self.assertFalse(self.destination.is_symlink())
         self.assertEqual(self.destination.stat().st_mode & 0o777, 0o755)
         self.assertEqual(
             subprocess.check_output([str(self.destination), "--version"], text=True),
-            f"{BINARY} {VERSION}\n",
+            f"{BINARY} {version}\n",
         )
 
     def existing_binary(self):
@@ -130,10 +139,27 @@ esac
         self.make_release()
         self.assert_installed(self.run_installer("--tag", f"v{VERSION}"))
 
-    def test_arm64_asset_selection(self):
-        self.env["TEST_ARCH"] = "aarch64"
-        self.make_release()
-        self.assert_installed(self.run_installer())
+    def test_asset_selection(self):
+        for arch, target_arch in (
+            ("x86_64", "x86_64"),
+            ("amd64", "x86_64"),
+            ("aarch64", "aarch64"),
+            ("arm64", "aarch64"),
+        ):
+            for version, libc in (("0.0.1", "gnu"), (VERSION, "musl")):
+                for option in ("--tag", "--version"):
+                    with self.subTest(arch=arch, version=version, option=option):
+                        self.env["TEST_ARCH"] = arch
+                        self.make_release(
+                            version=version,
+                            target=f"{target_arch}-unknown-linux-{libc}",
+                        )
+                        value = f"v{version}" if option == "--tag" else version
+                        self.assert_installed(
+                            self.run_installer(option, value), version=version
+                        )
+                        for asset in self.assets.iterdir():
+                            asset.unlink()
 
     def test_upgrade_existing_binary(self):
         self.existing_binary()
@@ -145,6 +171,11 @@ esac
         self.env["TEST_DOWNLOAD_FAIL"] = "1"
         self.assert_preserved(self.run_installer(), original)
 
+    def test_missing_musl_asset_does_not_fall_back_to_gnu(self):
+        original = self.existing_binary()
+        self.make_release(target="x86_64-unknown-linux-gnu")
+        self.assert_preserved(self.run_installer(), original)
+
     def test_bad_checksum_preserves_existing_binary(self):
         original = self.existing_binary()
         archive, checksum = self.make_release()
@@ -153,7 +184,7 @@ esac
 
     def test_wrong_version_preserves_existing_binary(self):
         original = self.existing_binary()
-        self.make_release(reported_version="0.0.2")
+        self.make_release(reported_version="0.0.3")
         self.assert_preserved(self.run_installer(), original)
 
     def test_failed_version_probe_preserves_binary_and_stderr(self):
