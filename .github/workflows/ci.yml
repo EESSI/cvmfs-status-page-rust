@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check installer
         run: |
@@ -37,7 +37,7 @@ jobs:
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -59,7 +59,7 @@ jobs:
 
       # Pin pre-migration main so this remains an independent reference after merging.
       - name: Checkout HTML reference
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: bc44664b95cd2a2a9d25fa9670b6cfdfbc3dd20a
           path: .html-reference
@@ -85,7 +85,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         id: rust
@@ -95,7 +95,7 @@ jobs:
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry

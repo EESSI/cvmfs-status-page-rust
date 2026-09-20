@@ -25,13 +25,13 @@ jobs:
 
     steps:
       - name: Checkout the event's candidate merge
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Checkout main at the event's exact base
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .live-reference
@@ -55,7 +55,7 @@ jobs:
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
