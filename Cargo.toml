@@ -1,6 +1,6 @@
 [package]
 name = "cvmfs-status-page-rust"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["Terje Kvernes <terje@kvernes.no>"]
 repository = "https://github.com/EESSI/cvmfs-status-page-rust"

@@ -6,12 +6,17 @@ the results.
 
 ## Current release
 
-[v0.0.1](https://github.com/EESSI/cvmfs-status-page-rust/releases/tag/v0.0.1)
-was released on **2026-09-20** with Linux binaries for x86_64 and aarch64,
-SHA-256 checksums, and an installer that supports replacing an existing binary.
-This first release includes status and trends pages, JSON and Prometheus output,
-replication grace periods, and fixes for health indicators, templates, public
-file permissions, and bundled fonts. See the [changelog](CHANGELOG.md).
+[v0.0.2](https://github.com/EESSI/cvmfs-status-page-rust/releases/tag/v0.0.2)
+was released on **2026-09-20** with static musl Linux binaries for x86_64 and
+aarch64. Compatibility no longer depends on glibc. Archives include SHA-256
+checksums, and the installer supports replacing an existing binary.
+See the [changelog](CHANGELOG.md).
+
+**Upgrading from v0.0.1:** archive and checksum names now use
+`unknown-linux-musl` instead of `unknown-linux-gnu`. Update direct download URLs
+or use the v0.0.2 installer shown below. An installer pinned to v0.0.1 cannot
+select the new asset names. The updated installer still supports installing
+v0.0.1's original GNU assets. HTTPS continues to use the system CA certificates.
 
 **Upgrading from earlier development builds:** custom templates must use Tera 2
 syntax. Follow the [Tera 2 migration
@@ -40,9 +45,8 @@ overwriting local customizations.
 
 ### Install or update from a prebuilt release
 
-Prebuilt Linux binaries are published on GitHub Releases for version tags.
-Starting with the upcoming v0.0.2 release, the release workflow builds static
-musl binaries for these targets:
+Prebuilt static musl Linux binaries are published on GitHub Releases for version
+tags, starting with v0.0.2. The release workflow builds these targets:
 
 - `x86_64-unknown-linux-musl`
 - `aarch64-unknown-linux-musl`
@@ -52,28 +56,24 @@ HTTPS requests still use the system's CA certificates. CI tests both native
 architectures and rejects binaries with a dynamic loader or shared-library
 dependencies before packaging release and PR artifacts.
 
-The current **v0.0.1** assets use `unknown-linux-gnu` and require **glibc 2.38
+The older **v0.0.1** assets use `unknown-linux-gnu` and require **glibc 2.38
 or newer**. The installer retains support for those original assets and checks
 that a downloaded binary can run before replacing an existing installation.
-
-The examples below pin the current v0.0.1 release. Once v0.0.2 is released,
-update both the script URL and requested tag or version to use its musl assets.
-For direct downloads, also change `unknown-linux-gnu` to `unknown-linux-musl`.
 
 Install or update a specific release with:
 
 ```sh
 repo=EESSI/cvmfs-status-page-rust
-curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.1/scripts/install.sh" \
-  | sh -s -- --tag v0.0.1 --install-dir /path/to/bin
+curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.2/scripts/install.sh" \
+  | sh -s -- --tag v0.0.2 --install-dir /path/to/bin
 ```
 
 You can also install by version:
 
 ```sh
 repo=EESSI/cvmfs-status-page-rust
-curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.1/scripts/install.sh" \
-  | sh -s -- --version 0.0.1 --install-dir /path/to/bin
+curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.2/scripts/install.sh" \
+  | sh -s -- --version 0.0.2 --install-dir /path/to/bin
 ```
 
 The install directory is required and must be writable by the current user. The
@@ -93,8 +93,8 @@ or restart.
 Download the release asset for your architecture from GitHub Releases:
 
 ```sh
-version=0.0.1
-target=x86_64-unknown-linux-gnu
+version=0.0.2
+target=x86_64-unknown-linux-musl
 package="cvmfs-status-page-rust-${version}-${target}"
 
 curl -fsSLO "https://github.com/EESSI/cvmfs-status-page-rust/releases/download/v${version}/${package}.tar.gz"
