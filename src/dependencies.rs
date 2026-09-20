@@ -43,7 +43,6 @@ pub fn populate(path: &str, force: bool) -> Result<()> {
     fs::create_dir_all(output_dir).context("Failed to create output directory")?;
 
     populate_dirs_and_files(&RESOURCES_DIR, output_dir, force)?;
-    populate_root_files(output_dir, force)?;
     create_template(output_dir, force, "status.html", STATUS_TEMPLATE)?;
     create_template(output_dir, force, "trends.html", TRENDS_TEMPLATE)?;
     create_template(output_dir, force, "_header.html", HEADER_TEMPLATE)?;
@@ -67,19 +66,13 @@ fn populate_dirs_and_files(dir: &Dir, output_dir: &Path, force: bool) -> Result<
                 trace!("Ensuring directory: {:?}", subdir_path);
                 fs::create_dir_all(&subdir_path)
                     .context(format!("Failed to create directory: {:?}", subdir_path))?;
-                populate_dirs_and_files(subdir, &subdir_path, force)?;
+                // Embedded paths are already relative to RESOURCES_DIR.
+                populate_dirs_and_files(subdir, output_dir, force)?;
             }
             include_dir::DirEntry::File(file) => {
                 write_file(file, output_dir, force)?;
             }
         }
-    }
-    Ok(())
-}
-
-fn populate_root_files(output_dir: &Path, force: bool) -> Result<()> {
-    for file in RESOURCES_DIR.files() {
-        write_file(file, output_dir, force)?;
     }
     Ok(())
 }
@@ -177,4 +170,45 @@ fn atomic_write_with_visibility(
         .persist(path)
         .context(format!("Failed to persist file to {:?}", path))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_stylesheet_font_url_resolves_to_a_populated_file() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        populate(dir.path().to_str().unwrap(), false)?;
+        let css = fs::read_to_string(dir.path().join("fa.all.min.css"))?;
+        let mut checked = 0;
+        for url in css.split("url(").skip(1) {
+            let path = url.split(')').next().unwrap();
+            let path = path.split(['?', '#']).next().unwrap();
+            let embedded = RESOURCES_DIR.get_file(path).unwrap();
+            assert_eq!(fs::read(dir.path().join(path))?, embedded.contents());
+            checked += 1;
+        }
+        assert!(checked > 0);
+        assert!(!dir.path().join("webfonts/webfonts").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn existing_fonts_are_preserved_unless_forced() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let name = "webfonts/fa-solid-900.woff2";
+        fs::create_dir(dir.path().join("webfonts"))?;
+        fs::write(dir.path().join(name), b"custom font")?;
+
+        populate(dir.path().to_str().unwrap(), false)?;
+        assert_eq!(fs::read(dir.path().join(name))?, b"custom font");
+
+        populate(dir.path().to_str().unwrap(), true)?;
+        assert_eq!(
+            fs::read(dir.path().join(name))?,
+            RESOURCES_DIR.get_file(name).unwrap().contents()
+        );
+        Ok(())
+    }
 }

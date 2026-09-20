@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Stratum 0 show not applicable. JSON includes the result and description.
   Existing custom templates retain the corrected icon classes; copy the updated
   GeoAPI cells from `templates/status.html` to add tooltips and accessibility labels.
+- Bundled fonts are now populated under `webfonts/`, matching the stylesheet URLs,
+  instead of the incorrect `webfonts/webfonts/` directory.
 
 ## [0.0.1] - 2026-06-18
 
