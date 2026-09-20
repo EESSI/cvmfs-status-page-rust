@@ -1309,7 +1309,8 @@ mod integration_helpers_tests {
         assert_eq!(repo["replication_grace"]["first_observed_at"], 1000);
         let mut context = tera::Context::new();
         context.insert("data", &data);
-        let html = templating::render_template("status.html", &context).unwrap();
+        let html =
+            templating::render_template(Path::new("templates"), "status.html", &context).unwrap();
         assert!(html.contains("repo: Catching up (2 revisions behind S0; 600s grace remaining)"));
         let args = Opt::parse_from(["test", "--destination", dir.path().to_str().unwrap()]);
         generate_prometheus_metrics(&args, &data, &manager, &Utc::now(), None).unwrap();

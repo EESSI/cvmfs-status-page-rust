@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use cvmfs_server_scraper::ServerMetadata;
 use log::{info, trace};
 use serde::Serialize;
+use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -9,10 +10,28 @@ use tera::Tera;
 
 use crate::models::Status;
 
-pub fn init_templates() -> Result<Tera> {
+pub fn init_templates(directory: &Path) -> Result<Tera> {
     let mut tera = Tera::new();
     tera.set_escape_fn(escape_html);
-    tera.load_from_glob("templates/*.html")
+    let mut files = Vec::new();
+    for entry in fs::read_dir(directory)
+        .with_context(|| format!("Failed to read template directory: {}", directory.display()))?
+    {
+        let path = entry?.path();
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|extension| extension == "html")
+        {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context("Invalid template filename")?
+                .to_owned();
+            files.push((path, Some(name)));
+        }
+    }
+    tera.add_template_files(files)
         .context("Failed to initialize Tera templates")?;
     Ok(tera)
 }
@@ -37,8 +56,12 @@ fn escape_html(input: &str, output: &mut dyn Write) -> io::Result<()> {
     output.write_all(&input.as_bytes()[start..])
 }
 
-pub fn render_template(template_name: &str, context: &tera::Context) -> Result<String> {
-    init_templates()?
+pub fn render_template(
+    directory: &Path,
+    template_name: &str,
+    context: &tera::Context,
+) -> Result<String> {
+    init_templates(directory)?
         .render(template_name, context)
         .context(format!("Failed to render template: {}", template_name))
 }
@@ -49,7 +72,8 @@ pub fn render_template_to_file(
     destination: &str,
     filename: &str,
 ) -> Result<()> {
-    let rendered = render_template(template_name, context)?;
+    let directory = Path::new(destination).join("templates");
+    let rendered = render_template(&directory, template_name, context)?;
     let fqfn = Path::new(destination).join(filename);
     let parent = fqfn
         .parent()
@@ -230,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_templates_parse() -> Result<()> {
-        init_templates()?;
+        init_templates(Path::new("templates"))?;
         Ok(())
     }
 
@@ -245,7 +269,7 @@ mod tests {
         context.insert("title", input);
         context.insert("asset_base_url", "");
 
-        let html = render_template("_header.html", &context)?;
+        let html = render_template(Path::new("templates"), "_header.html", &context)?;
 
         assert!(html.contains(&format!("<h1 class=\"content-left\">{expected}</h1>")));
         Ok(())
@@ -273,7 +297,7 @@ mod tests {
                 "contact_email": "test@example.com"
             }),
         );
-        render_template("status.html", &status_context)?;
+        render_template(Path::new("templates"), "status.html", &status_context)?;
 
         let mut trends_context = tera::Context::new();
         trends_context.insert(
@@ -289,7 +313,7 @@ mod tests {
                 "contact_email": "test@example.com"
             }),
         );
-        render_template("trends.html", &trends_context)?;
+        render_template(Path::new("templates"), "trends.html", &trends_context)?;
         Ok(())
     }
 }

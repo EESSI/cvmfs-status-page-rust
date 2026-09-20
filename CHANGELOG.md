@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Servers with no successfully scraped repositories now report `FAILED`, including
   unreachable AutoDetect servers with an empty configured repository list.
+- Load templates from the destination directory so installed binaries work from
+  any working directory and honor locally customized output templates.
 
 ## [0.0.1] - 2026-06-18
 
