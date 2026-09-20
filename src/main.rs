@@ -17,7 +17,7 @@ mod templating;
 
 use config::{get_config_manager, init_config};
 use cvmfs_server_scraper::{ScrapedServer, Scraper, ScraperCommon, ServerType};
-use dependencies::{atomic_write, populate};
+use dependencies::{atomic_write_public, populate};
 use derived::DerivedMetrics;
 use external::ExternalSnapshot;
 use history::{open_history_store, HistoryView, Snapshot};
@@ -769,7 +769,7 @@ fn generate_prometheus_metrics(
     }
 
     let text = b.build();
-    atomic_write(&filename, text.as_bytes())?;
+    atomic_write_public(&filename, text.as_bytes())?;
     info!("Prometheus metrics file written to: {:?}", filename);
     Ok(())
 }
@@ -880,7 +880,7 @@ fn write_json_file<T: serde::Serialize>(
     trace!("Generating JSON output file: {:?}", fqfn);
 
     let json = serde_json::to_string_pretty(data)?;
-    atomic_write(&fqfn, json.as_bytes())?;
+    atomic_write_public(&fqfn, json.as_bytes())?;
     info!("JSON output file written to: {:?}", fqfn);
     Ok(())
 }
@@ -897,7 +897,7 @@ fn write_trends_fallback(args: &Opt, err: &str) -> Result<()> {
         err,
         back_url
     );
-    atomic_write(&path, html.as_bytes())
+    atomic_write_public(&path, html.as_bytes())
 }
 
 fn path_to_str(path: &Path) -> Result<&str> {
