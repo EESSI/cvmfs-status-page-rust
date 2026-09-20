@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Linux release and PR binaries are statically linked with musl for x86_64 and
-  aarch64, removing the glibc version requirement (including on RHEL 9).
+  aarch64, removing the dependency on glibc for compatibility.
   **Breaking for direct asset downloads:** starting with v0.0.2, archive and
   checksum names use `unknown-linux-musl` instead of `unknown-linux-gnu`.
   Update download URLs or use the installer from the new release. The updated

@@ -47,15 +47,14 @@ musl binaries for these targets:
 - `x86_64-unknown-linux-musl`
 - `aarch64-unknown-linux-musl`
 
-These binaries require no system glibc or shared libraries and can run on RHEL 9.
+These binaries no longer depend on glibc or shared libraries for compatibility.
 HTTPS requests still use the system's CA certificates. CI tests both native
 architectures and rejects binaries with a dynamic loader or shared-library
 dependencies before packaging release and PR artifacts.
 
 The current **v0.0.1** assets use `unknown-linux-gnu` and require **glibc 2.38
-or newer**. They do not run on RHEL 9, which provides glibc 2.34. The installer
-retains support for those original assets and checks that a downloaded binary
-can run before replacing an existing installation.
+or newer**. The installer retains support for those original assets and checks
+that a downloaded binary can run before replacing an existing installation.
 
 The examples below pin the current v0.0.1 release. Once v0.0.2 is released,
 update both the script URL and requested tag or version to use its musl assets.
