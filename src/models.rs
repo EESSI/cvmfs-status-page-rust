@@ -830,6 +830,14 @@ impl StatusManager {
         repos
     }
 
+    pub fn repository_status(&self) -> Status {
+        self.get_status_per_unique_repo()
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(Status::FAILED)
+    }
+
     fn get_status_per_unique_repo(&self) -> HashMap<String, Status> {
         let mut repo_status: HashMap<String, Status> = HashMap::new();
 

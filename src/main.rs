@@ -264,7 +264,7 @@ fn generate_status_page_data(
         stratum0: create_stratum_status(s0status, status_manager, ServerType::Stratum0),
         stratum1: create_stratum_status(s1status, status_manager, ServerType::Stratum1),
         syncservers: create_stratum_status(syncstatus, status_manager, ServerType::SyncServer),
-        repositories_status: create_repo_status(),
+        repositories_status: create_repo_status(status_manager),
         repositories: status_manager.details_repositories(),
         config: config_manager.config.read().unwrap().clone(),
         servers: status_manager.get_server_status_for_all(),
@@ -815,11 +815,12 @@ fn create_stratum_status(
     }
 }
 
-fn create_repo_status() -> RepoStatus {
+fn create_repo_status(status_manager: &StatusManager) -> RepoStatus {
+    let status = status_manager.repository_status();
     RepoStatus {
         name: "Repositories".to_string(),
-        status: Status::OK,
-        revision_class: Status::OK.class().to_string(),
+        status,
+        revision_class: status.class().to_string(),
         snapshot_class: Status::OK.class().to_string(),
     }
 }
@@ -1323,6 +1324,54 @@ mod integration_helpers_tests {
             .any(|line| line.starts_with("repo_revision{")
                 && line.contains("s1.example.org")
                 && line.contains(" 10 ")));
+    }
+
+    #[parameterized(
+        healthy = { 10, 0, Status::OK, 0 },
+        warning = { 11, 0, Status::WARNING, 2 },
+        failed = { 20, 0, Status::FAILED, 3 },
+        catching_up = { 20, 600, Status::OK, 0 }
+    )]
+    fn repository_overview_and_metrics_follow_replica_health(
+        s0_revision: i32,
+        grace_seconds: u64,
+        expected: Status,
+        metric_level: i32,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = status_manager_with_replication(
+            &revision_pair(s0_revision, 10),
+            dir.path(),
+            grace_seconds,
+            1000,
+        );
+        let config_manager = config::ConfigManager {
+            config: std::sync::RwLock::new(
+                serde_json::from_str(include_str!("../config.json")).unwrap(),
+            ),
+        };
+        let data = generate_status_page_data(&config_manager, &manager).unwrap();
+        let json = serde_json::to_value(&data).unwrap();
+        assert_eq!(json["repositories_status"]["status"], expected.to_string());
+        assert_eq!(data.repositories_status.revision_class, expected.class());
+        let args = Opt::parse_from(["test", "--destination", dir.path().to_str().unwrap()]);
+        generate_prometheus_metrics(&args, &data, &manager, &Utc::now(), None).unwrap();
+        let metrics = fs::read_to_string(dir.path().join("metrics")).unwrap();
+        for prefix in [
+            format!("repositories_status {metric_level} "),
+            format!("status_overview{{category=\"repositories\"}} {metric_level} "),
+        ] {
+            assert!(
+                metrics.lines().any(|line| line.starts_with(&prefix)),
+                "{prefix}"
+            );
+        }
+    }
+
+    #[test]
+    fn repository_overview_fails_when_no_repositories_were_scraped() {
+        let manager = StatusManager::new(&[], None);
+        assert_eq!(create_repo_status(&manager).status, Status::FAILED);
     }
 
     #[test]

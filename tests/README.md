@@ -5,6 +5,11 @@ HTTP fixtures and compares their status and trends HTML byte for byte. It replac
 only each generated footer timestamp, checked against that run's JSON output.
 Whitespace, entity spelling, URLs, markup, and all other content must match.
 
+The pinned reference always shows a healthy repository overview. The comparison
+explicitly corrects that one indicator to failed for the unavailable and
+behind-without-grace fixtures, and requires exactly one matching reference block.
+All other output remains subject to the byte-for-byte comparison.
+
 The four scenarios cover healthy servers, replicas catching up, lag with grace
 disabled, and unavailable servers. Fixtures include unsorted servers and
 repositories, HTML special characters, Unicode, history enabled and disabled,
