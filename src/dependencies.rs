@@ -4,6 +4,8 @@ use log::{debug, info, trace};
 use once_cell::sync::Lazy;
 use std::fs;
 use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::NamedTempFile;
@@ -87,13 +89,15 @@ fn write_file(file: &include_dir::File, output_dir: &Path, force: bool) -> Resul
     STATS.files_checked.fetch_add(1, Ordering::Relaxed);
     trace!("Checking resource file: {:?}", file.path());
     if should_skip_file(&output_path, force) {
+        // Repair public resources written with owner-only permissions by older versions.
+        set_public_permissions(&output_path)?;
         STATS.files_skipped.fetch_add(1, Ordering::Relaxed);
         trace!("Skipping existing file {:?}", output_path);
         return Ok(());
     }
     trace!("Writing file {:?}", file.path());
     ensure_parent_dir(&output_path)?;
-    atomic_write(&output_path, file.contents())
+    atomic_write_public(&output_path, file.contents())
         .context(format!("Failed to write file: {:?}", output_path))?;
     STATS.files_written.fetch_add(1, Ordering::Relaxed);
     Ok(())
@@ -128,7 +132,33 @@ fn create_template(output_dir: &Path, force: bool, name: &str, contents: &str) -
     Ok(())
 }
 
+enum Visibility {
+    Private,
+    Public,
+}
+
 pub fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
+    atomic_write_with_visibility(path, contents, Visibility::Private)
+}
+
+pub fn atomic_write_public(path: &Path, contents: &[u8]) -> Result<()> {
+    atomic_write_with_visibility(path, contents, Visibility::Public)
+}
+
+fn set_public_permissions(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o644))
+        .with_context(|| format!("Failed to set public permissions on {}", path.display()))?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+fn atomic_write_with_visibility(
+    path: &Path,
+    contents: &[u8],
+    visibility: Visibility,
+) -> Result<()> {
     let dir = path.parent().context("Invalid path: no parent directory")?;
     let mut temp_file = NamedTempFile::new_in(dir)
         .context(format!("Failed to create temporary file in {:?}", dir))?;
@@ -139,6 +169,9 @@ pub fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
     temp_file
         .flush()
         .context("Failed to flush temporary file")?;
+    if matches!(visibility, Visibility::Public) {
+        set_public_permissions(temp_file.path())?;
+    }
     trace!("Renaming temporary file to {:?}", path);
     temp_file
         .persist(path)

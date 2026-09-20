@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unreachable AutoDetect servers with an empty configured repository list.
 - Load templates from the destination directory so installed binaries work from
   any working directory and honor locally customized output templates.
+- Public HTML, JSON, metrics, and static resources now use Unix mode `0644` so a
+  separate web-server account can read them. Existing copied resources have their
+  permissions repaired without overwriting customizations; internal atomic writes
+  retain owner-only permissions.
 
 ## [0.0.1] - 2026-06-18
 

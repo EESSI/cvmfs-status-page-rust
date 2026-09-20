@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use cvmfs_server_scraper::ServerMetadata;
-use log::{info, trace};
+use log::info;
 use serde::Serialize;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
-use tempfile::NamedTempFile;
 use tera::Tera;
 
+use crate::dependencies::atomic_write_public;
 use crate::models::Status;
 
 pub fn init_templates(directory: &Path) -> Result<Tera> {
@@ -83,18 +83,7 @@ pub fn render_template_to_file(
         parent
     ))?;
 
-    let mut tmpfile = NamedTempFile::new_in(parent)
-        .context(format!("Failed to create temporary file in {:?}", parent))?;
-
-    trace!("Writing to temporary file: {:?}", tmpfile.path());
-    tmpfile
-        .write_all(rendered.as_bytes())
-        .context("Failed to write to temporary file")?;
-
-    trace!("Persisting temporary file: {:?}", fqfn);
-    tmpfile
-        .persist(&fqfn)
-        .context(format!("Failed to persist temporary file to {:?}", fqfn))?;
+    atomic_write_public(&fqfn, rendered.as_bytes())?;
 
     info!("Rendered template to file: {:?}", fqfn);
     Ok(())
