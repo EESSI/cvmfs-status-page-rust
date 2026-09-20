@@ -427,6 +427,56 @@ pub struct Server {
     pub repositories: Vec<Repositories>,
     pub status: Status,
     pub metadata: Option<ServerMetadata>,
+    pub geoapi_status: GeoapiStatus,
+}
+
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GeoapiStatus {
+    Available,
+    Unavailable,
+    NotApplicable,
+}
+
+impl From<&ScrapedServer> for GeoapiStatus {
+    fn from(server: &ScrapedServer) -> Self {
+        match server {
+            ScrapedServer::Populated(server)
+                if server.server_type == ServerType::Stratum0
+                    || server.backend_detected == ServerBackendType::S3 =>
+            {
+                Self::NotApplicable
+            }
+            ScrapedServer::Failed(server)
+                if server.server_type == ServerType::Stratum0
+                    || server.backend_type == ServerBackendType::S3 =>
+            {
+                Self::NotApplicable
+            }
+            ScrapedServer::Populated(server) if !server.geoapi.response.is_empty() => {
+                Self::Available
+            }
+            _ => Self::Unavailable,
+        }
+    }
+}
+
+impl GeoapiStatus {
+    pub fn class(self) -> &'static str {
+        match self {
+            Self::Available => Status::OK.class(),
+            Self::Unavailable => "muted fas fa-question-circle",
+            Self::NotApplicable => "muted fas fa-minus",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Available => "GeoAPI response received",
+            Self::Unavailable => "GeoAPI result unavailable",
+            Self::NotApplicable => "GeoAPI not applicable",
+        }
+    }
 }
 
 impl Server {
@@ -436,7 +486,9 @@ impl Server {
             status: self.status,
             metadata: self.metadata.clone(),
             update_class: self.status.class().to_string(),
-            geoapi_class: Status::OK.class().to_string(),
+            geoapi_class: self.geoapi_status.class().to_string(),
+            geoapi_status: self.geoapi_status,
+            geoapi_description: self.geoapi_status.description().to_string(),
             replication_details: self
                 .repositories
                 .iter()
@@ -487,7 +539,7 @@ impl StatusManager {
         }
         let servers: Vec<Server> = scraped_servers
             .iter()
-            .map(|server| match server {
+            .map(|scraped| match scraped {
                 ScrapedServer::Populated(server) => {
                     let repositories: Vec<Repositories> = server
                         .repositories
@@ -537,6 +589,7 @@ impl StatusManager {
                         repositories,
                         status: overall_status,
                         metadata: Some(server.metadata.clone()),
+                        geoapi_status: GeoapiStatus::from(scraped),
                     }
                 }
                 ScrapedServer::Failed(server) => Server {
@@ -547,6 +600,7 @@ impl StatusManager {
                     repositories: Vec::new(),
                     status: Status::FAILED,
                     metadata: None,
+                    geoapi_status: GeoapiStatus::from(scraped),
                 },
             })
             .collect();
@@ -999,6 +1053,7 @@ mod tests {
                 repositories: vec![],
                 status: Status::OK,
                 metadata: None,
+                geoapi_status: GeoapiStatus::Unavailable,
             },
             Server {
                 server_type: ServerType::Stratum0,
@@ -1008,6 +1063,7 @@ mod tests {
                 repositories: vec![],
                 status: Status::MAINTENANCE,
                 metadata: None,
+                geoapi_status: GeoapiStatus::Unavailable,
             },
             Server {
                 server_type: ServerType::Stratum1,
@@ -1017,6 +1073,7 @@ mod tests {
                 repositories: vec![],
                 status: Status::DEGRADED,
                 metadata: None,
+                geoapi_status: GeoapiStatus::Unavailable,
             },
             Server {
                 server_type: ServerType::Stratum1,
@@ -1026,6 +1083,7 @@ mod tests {
                 repositories: vec![],
                 status: Status::OK,
                 metadata: None,
+                geoapi_status: GeoapiStatus::Unavailable,
             },
             Server {
                 server_type: ServerType::SyncServer,
@@ -1035,6 +1093,7 @@ mod tests {
                 repositories: vec![],
                 status: Status::OK,
                 metadata: None,
+                geoapi_status: GeoapiStatus::Unavailable,
             },
         ];
 

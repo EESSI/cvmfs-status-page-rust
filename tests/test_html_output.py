@@ -234,6 +234,29 @@ class HtmlOutputComparison(unittest.TestCase):
                             config, scenario, proxy,
                         )
                         self.assertEqual(server.unexpected, [])
+                        # Correct the pinned reference's unconditional GeoAPI checkmarks.
+                        path = "status/index.html" if scenario.nested else "index.html"
+                        geoapi_class = (
+                            "muted fas fa-question-circle" if scenario.unavailable
+                            else "status-ok fas fa-check"
+                        )
+                        description = (
+                            "GeoAPI result unavailable" if scenario.unavailable
+                            else "GeoAPI response received"
+                        )
+                        before = b'<td class="geoapi"><span class="status-ok fas fa-check"></span></td>'
+                        after = (
+                            f'<td class="geoapi"><span class="{geoapi_class}" '
+                            f'title="{description}" aria-label="{description}"></span></td>'
+                        ).encode()
+                        server_html, separator, repository_html = expected[path].partition(
+                            b'<div id="repositories_handler"'
+                        )
+                        self.assertTrue(separator)
+                        self.assertEqual(server_html.count(before), 4)
+                        expected[path] = (
+                            server_html.replace(before, after) + separator + repository_html
+                        )
                         for path in expected:
                             with self.subTest(page=path):
                                 self.assertEqual(

@@ -8,7 +8,7 @@ use std::path::Path;
 use tera::Tera;
 
 use crate::dependencies::atomic_write_public;
-use crate::models::Status;
+use crate::models::{GeoapiStatus, Status};
 
 pub fn init_templates(directory: &Path) -> Result<Tera> {
     let mut tera = Tera::new();
@@ -118,6 +118,8 @@ pub struct ServerStatus {
     pub metadata: Option<ServerMetadata>,
     pub update_class: String,
     pub geoapi_class: String,
+    pub geoapi_status: GeoapiStatus,
+    pub geoapi_description: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub replication_details: Vec<String>,
 }
@@ -208,6 +210,8 @@ mod tests {
             metadata: None,
             update_class: update_class.to_string(),
             geoapi_class: geoapi_class.to_string(),
+            geoapi_status: GeoapiStatus::Unavailable,
+            geoapi_description: GeoapiStatus::Unavailable.description().to_string(),
             replication_details: Vec::new(),
         };
 

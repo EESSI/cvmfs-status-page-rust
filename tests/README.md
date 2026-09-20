@@ -37,6 +37,11 @@ python3 tests/test_html_output.py \
 The test requires only Python's standard library and permission to bind a loopback
 socket. Compiler checks and the existing unit tests still run separately in CI.
 
+The comparison explicitly corrects the pinned reference's four GeoAPI indicators:
+successful CVMFS scrapes keep green checks, failed scrapes show an unavailable
+indicator, and both have descriptive titles and accessibility labels. It requires
+exactly four matching reference cells; all other HTML remains compared verbatim.
+
 ## Opt-in live scrape comparison
 
 Add the `live-scrape` label to a PR to compare its merged result with the exact
