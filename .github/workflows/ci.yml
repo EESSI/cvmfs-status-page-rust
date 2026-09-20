@@ -26,6 +26,9 @@ jobs:
           shellcheck scripts/install.sh
           python3 tests/test_install.py
 
+      - name: Test live capture and replay tooling
+        run: python3 tests/test_live_scrape_compare.py
+
       - name: Install Rust
         id: rust
         run: |

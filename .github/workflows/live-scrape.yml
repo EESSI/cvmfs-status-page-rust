@@ -1,0 +1,100 @@
+name: Live scrape comparison
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: live-scrape-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare one live scrape with main
+    if: contains(github.event.pull_request.labels.*.name, 'live-scrape')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_TERM_COLOR: always
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+    steps:
+      - name: Checkout candidate at the event's exact head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Checkout main at the event's exact base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .live-reference
+          persist-credentials: false
+
+      - name: Prepare review context and restore an approved capture
+        id: review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tests/live_scrape_ci.py \
+            --event-file "$GITHUB_EVENT_PATH" \
+            --report-dir live-comparison-output \
+            --replay-dir .live-replay
+
+      - name: Install Rust
+        id: rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Cargo artifacts
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git/db
+            target
+            ${{ runner.temp }}/live-reference-target
+          key: cargo-live-${{ runner.os }}-${{ steps.rust.outputs.version }}-${{ hashFiles('Cargo.lock', '.live-reference/Cargo.lock') }}-${{ github.event.pull_request.head.sha }}
+          restore-keys: |
+            cargo-live-${{ runner.os }}-${{ steps.rust.outputs.version }}-${{ hashFiles('Cargo.lock', '.live-reference/Cargo.lock') }}-
+
+      - name: Build reference
+        working-directory: .live-reference
+        run: cargo build --locked --target-dir "$RUNNER_TEMP/live-reference-target"
+
+      - name: Build candidate
+        run: cargo build --locked
+
+      - name: Compare captured responses
+        env:
+          APPROVED: ${{ steps.review.outputs.approved }}
+        run: |
+          args=(
+            --reference-root .live-reference
+            --reference-binary "$RUNNER_TEMP/live-reference-target/debug/cvmfs-status-page-rust"
+            --candidate-root .
+            --candidate-binary target/debug/cvmfs-status-page-rust
+            --configuration .live-reference/config.json
+            --report-dir live-comparison-output
+          )
+          if [ "$APPROVED" = true ]; then
+            args+=(--cassette-in .live-replay/cassette.json --allow-divergence)
+          fi
+          python3 tests/live_scrape_compare.py "${args[@]}"
+
+      - name: Upload capture, normalized outputs, and diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-scrape-${{ env.HEAD_SHA }}-${{ env.BASE_SHA }}
+          path: live-comparison-output/
+          if-no-files-found: warn
+          retention-days: 14
