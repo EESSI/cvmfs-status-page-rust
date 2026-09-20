@@ -80,7 +80,7 @@
                                 {% endif %}
                             </td>
                             <td class="updates"><span class="{{ server.update_class }}"></span></td>
-                            <td class="geoapi"><span class="{{ server.geoapi_class }}"></span></td>
+                            <td class="geoapi"><span class="{{ server.geoapi_class }}" title="{{ server.geoapi_description }}" aria-label="{{ server.geoapi_description }}"></span></td>
                         </tr>
                         {% endfor %}
                     </table>
@@ -111,7 +111,7 @@
                         <tr>
                             <td class="main">{{ server.name }}</td>
                             <td class="updates"><span class="{{ server.update_class }}"></span></td>
-                            <td class="geoapi"><span class="{{ server.geoapi_class }}"></span></td>
+                            <td class="geoapi"><span class="{{ server.geoapi_class }}" title="{{ server.geoapi_description }}" aria-label="{{ server.geoapi_description }}"></span></td>
                         </tr>
                         {% endfor %}
                     </table>

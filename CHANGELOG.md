@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Repository overview health and its Prometheus gauges now reflect the worst
   scraped repository status, including replication grace. No scraped repositories
   report `FAILED` instead of an unconditional `OK`.
+- GeoAPI indicators now reflect available scrape results instead of always showing
+  green. Missing results show an unavailable indicator, and known S3 backends and
+  Stratum 0 show not applicable. JSON includes the result and description.
+  Existing custom templates retain the corrected icon classes; copy the updated
+  GeoAPI cells from `templates/status.html` to add tooltips and accessibility labels.
 
 ## [0.0.1] - 2026-06-18
 

@@ -19,6 +19,14 @@ Top-level fields include:
 
 When history is available, each enriched server can include `uptime` and `incidents_90d`.
 
+Server table entries in `servers`, `stratum0.servers`, `stratum1.servers`, and
+`syncservers.servers` include `geoapi_status`, `geoapi_class`, and
+`geoapi_description`. The status is `available` when a successful CVMFS scrape
+returned a nonempty GeoAPI response, `not_applicable` for Stratum 0 and known S3
+backends, or `unavailable` when no successful result is available. An unavailable
+result does not establish whether GeoAPI itself failed: an earlier scrape step
+may have failed before the GeoAPI request. Revision health is evaluated separately.
+
 During the replication grace period, a lagging Stratum 1 repository counts as
 `OK`. Its entry in `servers_enriched[].repositories[]` includes an optional
 `replication_grace` object:

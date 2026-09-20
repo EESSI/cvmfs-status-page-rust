@@ -966,6 +966,54 @@ mod integration_helpers_tests {
         }))
     }
 
+    #[parameterized(
+        available = { ServerType::Stratum1, ServerBackendType::CVMFS, vec![1, 2, 3], models::GeoapiStatus::Available },
+        missing_result = { ServerType::Stratum1, ServerBackendType::CVMFS, vec![], models::GeoapiStatus::Unavailable },
+        s3 = { ServerType::Stratum1, ServerBackendType::S3, vec![], models::GeoapiStatus::NotApplicable },
+        stratum0 = { ServerType::Stratum0, ServerBackendType::CVMFS, vec![], models::GeoapiStatus::NotApplicable }
+    )]
+    fn geoapi_indicators_follow_scrape_results(
+        server_type: ServerType,
+        backend: ServerBackendType,
+        response: Vec<u32>,
+        expected: models::GeoapiStatus,
+    ) {
+        let mut scraped = populated_server("server.example.org", server_type, &[("repo", 12)]);
+        if let ScrapedServer::Populated(server) = &mut scraped {
+            server.backend_type = ServerBackendType::AutoDetect;
+            server.backend_detected = backend;
+            server.geoapi.response = response;
+        }
+        let manager = StatusManager::new(&[scraped], None);
+        let row = manager.get_server_status_for_all().remove(0);
+        assert_eq!(row.geoapi_status, expected);
+        assert_eq!(row.geoapi_class, expected.class());
+        assert_eq!(row.geoapi_description, expected.description());
+    }
+
+    #[test]
+    fn failed_scrapes_do_not_show_green_geoapi() {
+        let manager = StatusManager::new(
+            &[failed_server("s1.example.org", ServerType::Stratum1)],
+            None,
+        );
+        let row = manager.get_server_status_for_all().remove(0);
+        assert_eq!(row.geoapi_status, models::GeoapiStatus::Unavailable);
+        assert_ne!(row.geoapi_class, Status::OK.class());
+    }
+
+    #[test]
+    fn geoapi_can_be_available_while_revision_health_is_failed() {
+        let mut scraped = revision_pair(12, 10);
+        if let ScrapedServer::Populated(server) = &mut scraped[1] {
+            server.geoapi.response = vec![1, 2, 3];
+        }
+        let manager = StatusManager::new(&scraped, None);
+        let row = manager.servers[1].to_server_status();
+        assert_eq!(row.status, Status::FAILED);
+        assert_eq!(row.geoapi_status, models::GeoapiStatus::Available);
+    }
+
     fn failed_server(hostname: &str, server_type: ServerType) -> ScrapedServer {
         ScrapedServer::Failed(FailedServer {
             hostname: hostname.parse().unwrap(),
