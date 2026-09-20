@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without extending grace for stalled replicas. Includes "Catching up" details
   in HTML and JSON. Set `replication_grace_seconds` to `0` for immediate checks.
 
+### Fixed
+
+- Servers with no successfully scraped repositories now report `FAILED`, including
+  unreachable AutoDetect servers with an empty configured repository list.
+
 ## [0.0.1] - 2026-06-18
 
 ### Added

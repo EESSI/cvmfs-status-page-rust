@@ -974,6 +974,45 @@ mod integration_helpers_tests {
         })
     }
 
+    #[parameterized(
+        stratum0 = { ServerType::Stratum0 },
+        stratum1 = { ServerType::Stratum1 },
+        syncserver = { ServerType::SyncServer }
+    )]
+    fn empty_populated_servers_are_failed(server_type: ServerType) {
+        let mut scraped = populated_server("empty.example.org", server_type, &[]);
+        if let ScrapedServer::Populated(server) = &mut scraped {
+            server.backend_type = ServerBackendType::AutoDetect;
+            server.backend_detected = ServerBackendType::S3;
+        }
+        let manager = StatusManager::new(&[scraped], None);
+
+        assert_eq!(manager.servers[0].status, Status::FAILED);
+        assert!(manager.get_by_type_ok(server_type).is_empty());
+    }
+
+    #[test]
+    fn empty_scrapes_cannot_make_configured_health_rules_green() {
+        let scraped = [
+            populated_server("s0.example.org", ServerType::Stratum0, &[]),
+            populated_server("s1.example.org", ServerType::Stratum1, &[]),
+            populated_server("s1-other.example.org", ServerType::Stratum1, &[]),
+            populated_server("sync.example.org", ServerType::SyncServer, &[]),
+        ];
+        let manager = StatusManager::new(&scraped, None);
+        let config_manager = config::ConfigManager {
+            config: std::sync::RwLock::new(
+                serde_json::from_str(include_str!("../config.json")).unwrap(),
+            ),
+        };
+        let data = generate_status_page_data(&config_manager, &manager).unwrap();
+
+        assert_eq!(data.eessi_status.status, Status::FAILED);
+        assert_eq!(data.stratum0.status, Status::FAILED);
+        assert_eq!(data.stratum1.status, Status::FAILED);
+        assert_eq!(data.syncservers.status, Status::FAILED);
+    }
+
     fn revision_pair(s0: i32, s1: i32) -> Vec<ScrapedServer> {
         vec![
             populated_server("s0.example.org", ServerType::Stratum0, &[("repo", s0)]),
