@@ -527,7 +527,7 @@ impl StatusManager {
                         .iter()
                         .map(|repo| repo.status)
                         .max()
-                        .unwrap_or(Status::OK);
+                        .unwrap_or(Status::FAILED);
 
                     Server {
                         server_type: server.server_type,
