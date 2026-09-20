@@ -34,8 +34,8 @@ socket. Compiler checks and the existing unit tests still run separately in CI.
 
 ## Opt-in live scrape comparison
 
-Add the `live-scrape` label to a PR to compare its binary with the exact main/base
-commit recorded in the PR event. The separate **Live scrape comparison** workflow
+Add the `live-scrape` label to a PR to compare its merged result with the exact
+main/base commit recorded in the PR event. The **Live scrape comparison** workflow
 captures the reference binary's public CVMFS HTTP responses once, then replays
 those responses to the candidate. The candidate never refreshes a recorded
 response. GeoAPI's random request nonce is normalized; the host, repository, host
@@ -64,7 +64,10 @@ events also require fresh approval when differences remain. To rerun a fresh liv
 capture, remove and reapply `live-scrape`. Removing that label disables the check.
 
 The workflow uses read-only repository permissions and the ordinary
-`pull_request` event, explicitly checking out the event's head and base SHAs.
+`pull_request` event, explicitly checking out the event's merge and base SHAs.
+Testing the merged result includes current main changes and makes the tooling
+available to PR branches created before this workflow was added. Approval remains
+bound to the exact head/base pair defining that merge.
 See GitHub's [pull request event documentation][pr-events] for checkout semantics.
 It needs no CVMFS or Grafana credentials. Repository maintainers should create the
 two labels before using this workflow.

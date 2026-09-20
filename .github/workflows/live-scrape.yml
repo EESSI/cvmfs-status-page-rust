@@ -24,10 +24,10 @@ jobs:
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
     steps:
-      - name: Checkout candidate at the event's exact head
+      - name: Checkout the event's candidate merge
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Checkout main at the event's exact base
