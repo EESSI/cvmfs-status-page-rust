@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separate web-server account can read them. Existing copied resources have their
   permissions repaired without overwriting customizations; internal atomic writes
   retain owner-only permissions.
+- Repository overview health and its Prometheus gauges now reflect the worst
+  scraped repository status, including replication grace. No scraped repositories
+  report `FAILED` instead of an unconditional `OK`.
 
 ## [0.0.1] - 2026-06-18
 
