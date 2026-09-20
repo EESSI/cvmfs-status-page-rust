@@ -14,8 +14,8 @@ Usage:
   install.sh --version X.Y.Z --install-dir DIR
 
 Options:
-  --tag TAG          Release tag to install, for example v0.0.1.
-  --version VERSION  Release version to install, for example 0.0.1.
+  --tag TAG          Release tag to install, for example v0.0.2.
+  --version VERSION  Release version to install, for example 0.0.2.
   --install-dir DIR  Directory where ${binary_name} should be installed.
   --repo OWNER/REPO  GitHub repository to install from. Defaults to ${repo}.
   -h, --help         Show this help.
@@ -77,7 +77,7 @@ if [ -n "$version" ]; then
 elif [ -n "$tag" ]; then
     case "$tag" in
         v*) version="${tag#v}" ;;
-        *) die "--tag must start with v, for example v0.0.1" ;;
+        *) die "--tag must start with v, for example v0.0.2" ;;
     esac
 else
     die "one of --tag or --version is required"
@@ -96,15 +96,22 @@ need_cmd mktemp
 arch="$(uname -m)"
 case "$arch" in
     x86_64|amd64)
-        target="x86_64-unknown-linux-gnu"
+        target_arch="x86_64"
         ;;
     aarch64|arm64)
-        target="aarch64-unknown-linux-gnu"
+        target_arch="aarch64"
         ;;
     *)
         die "unsupported architecture: $arch"
         ;;
 esac
+
+# v0.0.1 is the only release published with glibc-dependent GNU archives.
+libc="musl"
+if [ "$version" = "0.0.1" ]; then
+    libc="gnu"
+fi
+target="${target_arch}-unknown-linux-${libc}"
 
 package="${binary_name}-${version}-${target}"
 archive="${package}.tar.gz"

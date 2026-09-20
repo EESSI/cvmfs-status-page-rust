@@ -40,16 +40,25 @@ overwriting local customizations.
 
 ### Install or update from a prebuilt release
 
-Prebuilt Linux binaries are published on GitHub Releases for version tags. The
-release workflow publishes these targets:
+Prebuilt Linux binaries are published on GitHub Releases for version tags.
+Starting with the upcoming v0.0.2 release, the release workflow builds static
+musl binaries for these targets:
 
-- `x86_64-unknown-linux-gnu`
-- `aarch64-unknown-linux-gnu`
+- `x86_64-unknown-linux-musl`
+- `aarch64-unknown-linux-musl`
 
-The prebuilt binaries require **glibc 2.38 or newer** and are built on Ubuntu
-24.04. They do not run on RHEL 9, which provides glibc 2.34; use the source build
-instructions below on older systems. The installer checks that the downloaded
-binary can run before replacing an existing installation.
+These binaries no longer depend on glibc or shared libraries for compatibility.
+HTTPS requests still use the system's CA certificates. CI tests both native
+architectures and rejects binaries with a dynamic loader or shared-library
+dependencies before packaging release and PR artifacts.
+
+The current **v0.0.1** assets use `unknown-linux-gnu` and require **glibc 2.38
+or newer**. The installer retains support for those original assets and checks
+that a downloaded binary can run before replacing an existing installation.
+
+The examples below pin the current v0.0.1 release. Once v0.0.2 is released,
+update both the script URL and requested tag or version to use its musl assets.
+For direct downloads, also change `unknown-linux-gnu` to `unknown-linux-musl`.
 
 Install or update a specific release with:
 
@@ -101,6 +110,22 @@ install -m 0755 "${package}/cvmfs-status-page-rust" /path/to/bin/cvmfs-status-pa
 - `mkdir /tmp/build-dir && cd /tmp/build-dir`
 - `git clone https://github.com/EESSI/cvmfs-status-page-rust`
 - `cd cvmfs-status-page-rust && cargo build --release`
+
+To reproduce a static release build on an Ubuntu/Debian host with the same CPU
+architecture as the target:
+
+```sh
+sudo apt-get update
+sudo apt-get install --yes musl-tools cmake
+target="$(uname -m)-unknown-linux-musl"
+rustup target add "$target"
+env "CC_${target}=musl-gcc" cargo build --release --locked --target "$target"
+sh scripts/check-static-binary.sh "target/${target}/release/cvmfs-status-page-rust"
+```
+
+Use `x86_64` or `aarch64` for the target architecture. The compiler supplied by
+`musl-tools` builds for the host CPU; cross-compilation needs a matching musl
+C toolchain. A plain `cargo build --release` continues to use Rust's host target.
 
 ## Configuration
 
@@ -460,7 +485,8 @@ status code values, and examples.
 
 Releases are created automatically by GitHub Actions when a version tag is
 pushed. The release workflow verifies the tag, runs formatting, clippy, and
-tests, then builds Linux release binaries for x86_64 and aarch64 before
+tests for the musl target, then builds static Linux release binaries for x86_64
+and aarch64. It checks static linkage and runs each binary's `--version` before
 publishing the GitHub Release.
 
 1. Update `version` in `Cargo.toml` and refresh `Cargo.lock`.
@@ -477,7 +503,7 @@ publishing the GitHub Release.
    ```
 
 6. Confirm that the release contains these assets:
-   - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-gnu.tar.gz`
-   - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-gnu.tar.gz.sha256`
-   - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-gnu.tar.gz`
-   - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-gnu.tar.gz.sha256`
+   - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-musl.tar.gz`
+   - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-musl.tar.gz.sha256`
+   - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-musl.tar.gz`
+   - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-musl.tar.gz.sha256`

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Linux release and PR binaries are statically linked with musl for x86_64 and
+  aarch64, removing the dependency on glibc for compatibility.
+  **Breaking for direct asset downloads:** starting with v0.0.2, archive and
+  checksum names use `unknown-linux-musl` instead of `unknown-linux-gnu`.
+  Update download URLs or use the installer from the new release. The updated
+  installer still selects the original GNU assets when installing v0.0.1.
+
 ## [0.0.1] - 2026-09-20
 
 ### Added
