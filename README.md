@@ -46,6 +46,11 @@ release workflow publishes these targets:
 - `x86_64-unknown-linux-gnu`
 - `aarch64-unknown-linux-gnu`
 
+The prebuilt binaries require **glibc 2.38 or newer** and are built on Ubuntu
+24.04. They do not run on RHEL 9, which provides glibc 2.34; use the source build
+instructions below on older systems. The installer checks that the downloaded
+binary can run before replacing an existing installation.
+
 Install or update a specific release with:
 
 ```sh
