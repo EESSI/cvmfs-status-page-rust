@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-09-20
+
+### Added
+
+- Initial EESSI status page generator with HTML and JSON output.
+- Configurable CVMFS, S3, and AutoDetect server scraping.
+- Rhai-based status condition evaluation.
+- Optional Prometheus metrics output.
+- Local history, reliability summaries, and trends page output.
+- Optional Grafana-backed external disk usage metrics.
+- Bundled static resources and templates for generated status pages.
+- Prebuilt Linux binaries for x86_64 and aarch64, with SHA-256 checksums and
+  an installer for installing or updating a specific release.
+
 ### Security
 
 - Updated `quinn-proto` to 0.11.18, addressing remote memory exhaustion from
@@ -46,15 +60,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GeoAPI cells from `templates/status.html` to add tooltips and accessibility labels.
 - Bundled fonts are now populated under `webfonts/`, matching the stylesheet URLs,
   instead of the incorrect `webfonts/webfonts/` directory.
-
-## [0.0.1] - 2026-06-18
-
-### Added
-
-- Initial EESSI status page generator with HTML and JSON output.
-- Configurable CVMFS, S3, and AutoDetect server scraping.
-- Rhai-based status condition evaluation.
-- Optional Prometheus metrics output.
-- Local history, reliability summaries, and trends page output.
-- Optional Grafana-backed external disk usage metrics.
-- Bundled static resources and templates for generated status pages.
