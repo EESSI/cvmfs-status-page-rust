@@ -18,13 +18,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check installer
         run: |
           sh -n scripts/install.sh
           shellcheck scripts/install.sh
           python3 tests/test_install.py
+
+      - name: Test live capture and replay tooling
+        run: python3 tests/test_live_scrape_compare.py
 
       - name: Install Rust
         id: rust
@@ -34,7 +37,7 @@ jobs:
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -56,7 +59,7 @@ jobs:
 
       # Pin pre-migration main so this remains an independent reference after merging.
       - name: Checkout HTML reference
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: bc44664b95cd2a2a9d25fa9670b6cfdfbc3dd20a
           path: .html-reference
@@ -82,7 +85,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         id: rust
@@ -92,7 +95,7 @@ jobs:
           echo "version=$(rustc --version)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -121,7 +124,7 @@ jobs:
           sha256sum "${package}.tar.gz" > "${package}.tar.gz.sha256"
 
       - name: Upload PR binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pr-${{ github.event.pull_request.number }}-${{ env.TARGET }}
           path: |
