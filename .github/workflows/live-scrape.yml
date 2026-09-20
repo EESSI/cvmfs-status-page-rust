@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload capture, normalized outputs, and diff
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: live-scrape-${{ env.HEAD_SHA }}-${{ env.BASE_SHA }}
           path: live-comparison-output/
