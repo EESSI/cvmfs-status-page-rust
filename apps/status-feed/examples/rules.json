@@ -1,0 +1,7 @@
+{
+  "fallback": "healthy",
+  "conditions": [
+    {"when": "facts.age_seconds > 900", "health": "failed", "message": "No completed build in the last fifteen minutes."},
+    {"when": "facts.age_seconds > 300", "health": "warning", "message": "The next build is taking longer than usual."}
+  ]
+}

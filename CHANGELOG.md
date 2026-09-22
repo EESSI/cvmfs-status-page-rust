@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Experimental source-independent framework crates for validated status documents,
+  optional bounded Rhai evaluation, swappable presentation, checkpoint persistence
+  and caller-owned update/delivery execution. A `status-feed` example accepts JSON
+  without collecting or probing, with an editable standalone template.
+- Generic alert delivery API with independent destination policies, firing and
+  recovery grace, reminders, durable leases, retries and inspectable dead letters.
+  Initial Slack and Mattermost webhook adapters use HTTPS and redact delivery errors.
+  The example sends only with explicit `--deliver-alerts`; CVMFS service alert
+  configuration is not yet integrated.
 - `cvmfs-status-server`, an Actix service with separate public and operational
   listeners, immediate collection, configurable intervals/deadlines, immutable
   publication, compatible cache restoration and graceful shutdown.

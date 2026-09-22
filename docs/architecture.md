@@ -4,6 +4,11 @@ All packages are unpublished internal APIs. Public Rust visibility allows siblin
 packages and tests to compose the system; it is not a supported library interface.
 Public HTML, JSON and metrics compatibility is tested separately.
 
+The source-independent framework and its package boundaries are documented in
+[the embedding guide](framework.md). The packages below retain the CVMFS
+compatibility pipeline. Reusable public artifacts now live in
+`status-publication`; `status-storage` re-exports them for existing callers.
+
 | Package | Responsibility |
 | --- | --- |
 | `status-domain` | Validated observations, health rules, replication deadlines, history models, rollups and derived calculations |
@@ -12,8 +17,8 @@ Public HTML, JSON and metrics compatibility is tested separately.
 | `status-sources` | CVMFS/Grafana adapters and conversion to domain observations |
 | `status-storage-fs` | Writer locks, paths, formats, migration, durable commits and recovery |
 | `status-presentation` | Public DTOs, templates, resources, JSON/metrics and static export |
-| `status-http` | Actix public and operational routes |
-| `apps/cvmfs-status-page-rust` | Binary composition, configuration loading, scheduling and shutdown |
+| `status-http` | Source-independent Actix public routes |
+| `apps/cvmfs-status-page-rust` | Binary composition, operational routes, configuration loading, scheduling and shutdown |
 
 Domain observations have private fields and fallible constructors. The source
 adapter converts parsed upstream data once; health evaluation consumes the
@@ -24,12 +29,12 @@ immutable and passed explicitly; there is no global configuration.
 `status-storage` depends only on domain models and supporting libraries. Application
 services cannot import the file adapter. The composition package creates a
 configured store and supplies it to the application. Storage exposes no paths,
-connections, file handles or backend selection. Every production adapter must
+connections, file handles or backend selection. Every production CVMFS adapter must
 implement replication, history and publication, including their failure semantics.
 A future database adapter can use transactions internally without changing callers.
 No SQLite adapter or backend-selection framework is included now.
 
-Storage requests and results and the public bundle have private fields. Public
+Storage requests and results and the shared public bundle have private fields. Public
 paths and artifacts are validated before a bundle can be constructed. Bundle bytes
 are a storage-owned representation, separate from response DTOs. The application
 holds immutable publications; HTTP requests only clone the current generation.

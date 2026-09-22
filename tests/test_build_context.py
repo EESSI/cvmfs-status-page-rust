@@ -52,7 +52,7 @@ class BuildContext(unittest.TestCase):
         copied = {part for group in copies for part in group.split()}
         workspace = tomllib.loads((ROOT / "Cargo.toml").read_text())
         members = [p for pattern in workspace["workspace"]["members"] for p in ROOT.glob(pattern)]
-        self.assertEqual(len(members), 8)
+        self.assertEqual(len(members), 18)
         for member in members:
             self.assertIn(member.relative_to(ROOT).parts[0], copied)
             self.assertTrue((member / "Cargo.toml").is_file())
@@ -87,6 +87,8 @@ class BuildContext(unittest.TestCase):
             "status-domain": {"status-application", "status-storage", "status-storage-fs", "cvmfs_server_scraper", "actix-web"},
             "status-storage": {"status-application", "status-storage-fs", "actix-web"},
             "status-application": {"status-storage-fs", "status-presentation", "status-sources", "actix-web"},
+            "status-checkpoint": {"status-framework", "status-framework-fs", "reqwest", "actix-web"},
+            "status-framework-fs": {"status-framework", "actix-web"},
             "status-storage-fs": {"status-application", "status-presentation", "actix-web"},
         }
         for manifest in list(ROOT.glob("crates/*/Cargo.toml")) + list(ROOT.glob("apps/*/Cargo.toml")):
@@ -100,6 +102,29 @@ class BuildContext(unittest.TestCase):
             self.assertIn("test_container.py", workflow)
             self.assertIn("docker build", workflow)
             self.assertNotIn("paths-ignore:", workflow)
+
+    def test_framework_dependencies_do_not_reach_cvmfs_or_collection(self):
+        manifests = list(ROOT.glob("crates/*/Cargo.toml")) + list(ROOT.glob("apps/*/Cargo.toml"))
+        graph = {}
+        for manifest in manifests:
+            data = tomllib.loads(manifest.read_text())
+            graph[data["package"]["name"]] = set(data.get("dependencies", {}))
+        forbidden = {"status-domain", "status-application", "status-sources", "status-storage",
+                     "status-storage-fs", "status-presentation", "cvmfs_server_scraper"}
+        reusable = {"status-model", "status-evaluation", "status-alerting", "status-alert-webhook",
+                    "status-publication", "status-checkpoint", "status-framework", "status-framework-fs", "status-theme",
+                    "status-http", "status-feed"}
+        for package in reusable:
+            seen = set()
+            pending = list(graph[package])
+            while pending:
+                dependency = pending.pop()
+                if dependency not in seen:
+                    seen.add(dependency)
+                    pending.extend(graph.get(dependency, ()))
+            self.assertFalse(seen & forbidden, (package, seen & forbidden))
+        for package in ("status-model", "status-evaluation", "status-alerting"):
+            self.assertFalse(graph[package] & {"reqwest", "actix-web", "status-framework-fs"})
 
 
 if __name__ == "__main__":

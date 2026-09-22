@@ -1,0 +1,16 @@
+[package]
+name = "status-checkpoint"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+contract-tests = []
+
+[dependencies]
+status-model.workspace = true
+status-alerting.workspace = true
+status-publication.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

@@ -185,7 +185,7 @@ pub async fn run(args: ServiceArgs) -> Result<()> {
     let operational_server = HttpServer::new(move || {
         App::new()
             .app_data(operational.clone())
-            .configure(status_http::operational_routes)
+            .configure(crate::operations_http::operational_routes)
     })
     .workers(1)
     .disable_signals()
@@ -401,6 +401,17 @@ mod worker_tests {
         config.history.enabled = history;
         ConfigManager::try_from_config(config).unwrap()
     }
+    async fn wait_for_second_collection(calls: &AtomicUsize) {
+        // This is a stalled-worker watchdog, not a throughput assertion. Durable
+        // filesystem writes can be slow on shared build and CI hosts.
+        tokio::time::timeout(Duration::from_secs(30), async {
+            while calls.load(Ordering::SeqCst) < 2 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("worker did not start a second collection");
+    }
     #[tokio::test]
     async fn source_panic_is_supervised_and_shutdown_finishes_active_generation() {
         let dir = tempfile::tempdir().unwrap();
@@ -418,13 +429,7 @@ mod worker_tests {
         let ops = Operations::new(site.clone(), 1, serde_json::json!({}));
         let (stop, receiver) = watch::channel(false);
         let task = tokio::spawn(worker(generator, site.clone(), ops.clone(), 1, 5, receiver));
-        tokio::time::timeout(Duration::from_secs(5), async {
-            while calls.load(Ordering::SeqCst) < 2 {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .unwrap();
+        wait_for_second_collection(&calls).await;
         stop.send(true).unwrap();
         task.await.unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 2);
@@ -451,13 +456,7 @@ mod worker_tests {
         let ops = Operations::new(site.clone(), 1, serde_json::json!({}));
         let (stop, receiver) = watch::channel(false);
         let task = tokio::spawn(worker(generator, site.clone(), ops, 1, 5, receiver));
-        tokio::time::timeout(Duration::from_secs(5), async {
-            while calls.load(Ordering::SeqCst) < 2 {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await
-        .unwrap();
+        wait_for_second_collection(&calls).await;
         stop.send(true).unwrap();
         task.await.unwrap();
         assert_eq!(source.max_active.load(Ordering::SeqCst), 1);

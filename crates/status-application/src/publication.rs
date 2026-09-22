@@ -1,20 +1,9 @@
 //! Immutable publication snapshots and runtime diagnostics for readers.
 use chrono::Utc;
 use serde::Serialize;
-use status_storage::PublicBundle;
 use std::sync::{Arc, RwLock};
 
-#[derive(Clone, Default)]
-pub struct PublishedSite(Arc<RwLock<Option<Arc<PublicBundle>>>>);
-impl PublishedSite {
-    pub fn current(&self) -> Option<Arc<PublicBundle>> {
-        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
-    }
-    /// Call only with a bundle whose durable commit completed (or recovered one).
-    pub fn publish(&self, bundle: PublicBundle) {
-        *self.0.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(bundle));
-    }
-}
+pub use status_publication::PublishedSite;
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Diagnostics {
     worker_running: bool,
@@ -109,7 +98,7 @@ impl Operations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use status_storage::{Artifact, PublicPath};
+    use status_storage::{Artifact, PublicBundle, PublicPath};
     use std::{
         collections::BTreeMap,
         sync::atomic::{AtomicBool, Ordering},

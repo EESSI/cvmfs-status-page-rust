@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }}</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+        body { max-width: 60rem; margin: 4rem auto; padding: 0 1.5rem; }
+        h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.04em; }
+        ul { list-style: none; padding: 0; }
+        li { border: 1px solid #8886; border-radius: 0.75rem; padding: 1.25rem; margin: 1rem 0; }
+        .heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
+        .health { font-weight: 600; }
+        .healthy { color: light-dark(#126833, #75d89b); }
+        .warning, .degraded { color: light-dark(#805700, #f5cb73); }
+        .failed { color: light-dark(#ad2332, #ffa0a8); }
+        .message { white-space: pre-wrap; overflow-wrap: anywhere; }
+        small, footer { opacity: 0.75; }
+    </style>
+</head>
+<body>
+    <header><h1>{{ page.title }}</h1></header>
+    <main aria-label="Component status">
+        <ul>
+        {% for component in page.components %}
+            <li>
+                <div class="heading"><strong>{{ component.label }}</strong><span class="health {{ component.health }}">{{ component.health }}</span></div>
+                {% if component.group %}<small>{{ component.group }}</small>{% endif %}
+                {% if component.message %}<p class="message">{{ component.message }}</p>{% endif %}
+            </li>
+        {% else %}
+            <li>No components reported.</li>
+        {% endfor %}
+        </ul>
+    </main>
+    <footer><a href="status.json">Status data</a> · Updated {{ generated_at }}</footer>
+</body>
+</html>

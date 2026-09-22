@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "apps/cvmfs-status-page-rust"]
+members = ["crates/*", "apps/*"]
 default-members = ["apps/cvmfs-status-page-rust"]
 # CI builds historical checkouts independently with their original manifests.
 exclude = [".html-reference", ".live-reference"]
@@ -44,3 +44,12 @@ status-sources = { path = "crates/status-sources" }
 status-storage-fs = { path = "crates/status-storage-fs" }
 status-presentation = { path = "crates/status-presentation" }
 status-http = { path = "crates/status-http" }
+status-model = { path = "crates/status-model" }
+status-publication = { path = "crates/status-publication" }
+status-evaluation = { path = "crates/status-evaluation" }
+status-alerting = { path = "crates/status-alerting" }
+status-alert-webhook = { path = "crates/status-alert-webhook" }
+status-framework = { path = "crates/status-framework" }
+status-framework-fs = { path = "crates/status-framework-fs" }
+status-theme = { path = "crates/status-theme" }
+status-checkpoint = { path = "crates/status-checkpoint" }

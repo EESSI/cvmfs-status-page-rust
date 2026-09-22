@@ -1,0 +1,7 @@
+{
+  "namespace": "publishing",
+  "destinations": [
+    {"id": "slack-operations", "kind": "slack", "endpoint_env": "STATUS_SLACK_WEBHOOK", "trigger": ["failed", "warning", "unknown"], "firing_grace_seconds": 120, "recovery_grace_seconds": 60, "repeat_seconds": 3600},
+    {"id": "mattermost-operations", "kind": "mattermost", "endpoint_env": "STATUS_MATTERMOST_WEBHOOK", "trigger": ["failed"], "firing_grace_seconds": 300, "recovery_grace_seconds": 120}
+  ]
+}

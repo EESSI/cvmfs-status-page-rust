@@ -1,0 +1,7 @@
+{
+  "title": "Publishing service",
+  "components": [
+    {"id": "builds", "label": "Package builds", "group": "Publishing", "facts": {"age_seconds": 480}},
+    {"id": "catalogue", "label": "Catalogue", "group": "Publishing", "health": "healthy", "message": "The latest release is available."}
+  ]
+}
