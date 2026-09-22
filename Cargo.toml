@@ -1,11 +1,16 @@
-[package]
-name = "cvmfs-status-page-rust"
+[workspace]
+resolver = "2"
+members = ["crates/*", "apps/cvmfs-status-page-rust"]
+default-members = ["apps/cvmfs-status-page-rust"]
+
+[workspace.package]
 version = "0.0.2"
 edition = "2021"
 authors = ["Terje Kvernes <terje@kvernes.no>"]
 repository = "https://github.com/EESSI/cvmfs-status-page-rust"
+publish = false
 
-[dependencies]
+[workspace.dependencies]
 cvmfs_server_scraper = "0.0.7"
 futures = "0"
 tokio = { version = "1", features = ["full"] }
@@ -17,7 +22,6 @@ tera = { version = "2.4", features = ["glob_fs"] }
 chrono = "0"
 include_dir = "0"
 clap = { version = "4", features = ["derive"] }
-clap_derive = "4"
 yare = "3"
 rhai = "1"
 log = "0.4"
@@ -27,3 +31,14 @@ strum = "0"
 strum_macros = "0"
 reqwest = { version = "0.13", features = ["json"] }
 thiserror = "2"
+actix-web = { version = "4", default-features = false, features = ["macros"] }
+fs2 = "0.4"
+percent-encoding = "2"
+sha2 = "0.10"
+status-domain = { path = "crates/status-domain" }
+status-storage = { path = "crates/status-storage" }
+status-application = { path = "crates/status-application" }
+status-sources = { path = "crates/status-sources" }
+status-storage-fs = { path = "crates/status-storage-fs" }
+status-presentation = { path = "crates/status-presentation" }
+status-http = { path = "crates/status-http" }

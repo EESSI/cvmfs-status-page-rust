@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cvmfs-status-server`, an Actix service with separate public and operational
+  listeners, immediate collection, configurable intervals/deadlines, immutable
+  publication, compatible cache restoration and graceful shutdown.
+- Backend-neutral storage contracts and a complete filesystem adapter with
+  exclusive writer locks, durable generation manifests, previous-generation
+  recovery, and interrupted history maintenance recovery.
+- Non-root amd64/arm64 production images, read-only Compose deployment,
+  compatibility fixtures, container smoke tests and migration guidance.
+
+### Changed
+
+- Converted to an unpublished Rust workspace with libraries under `crates/` and
+  both binaries under `apps/cvmfs-status-page-rust`. Source templates and assets
+  now live under `crates/status-presentation/`; destination customization and
+  existing generator CLI options remain supported.
+- Both binaries acquire exclusive state/history writer locks. Deploy one writer;
+  stop cron before service cutover and retain state backups for rollback.
+- Static archives include the service binary; the installer continues installing
+  the static generator. Service operational settings are separate from status
+  configuration and public JSON.
+
+### Fixed
+
+- Preserve complete history samples appended after an interrupted JSONL write.
+- Unknown public URLs display a styled 404 page instead of a blank page, with
+  a customizable `templates/404.html` override and a link back to the status page.
+
 ## [0.0.2] - 2026-09-20
 
 ### Changed

@@ -1,0 +1,581 @@
+{
+  "index.html": "<!DOCTYPE html>\n<html lang=\"en\">\n\n<head>\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=yes\">\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"status.css\">\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"fa.all.min.css\">\n    <script>\n        window.STATUS_HISTORY_URL = \"history.json\";\n    </script>\n    <script src=\"status.js\" type=\"text/javascript\"></script>\n\n    <title>EESSI &lt;status&gt; &amp; &quot;\u00c5&#x2F;\u96ea&quot; &#x27;test&#x27;</title>\n</head>\n\n<body>\n\n    \n    \n    \n    \n    \n    <div class=\"header-row\">\n    <div class=\"header-text\">\n        <div class=\"content site-header\">\n            <h1 class=\"content-left\">EESSI &lt;status&gt; &amp; &quot;\u00c5&#x2F;\u96ea&quot; &#x27;test&#x27;</h1>\n            <img class=\"content-right inline logo\" src=\"eessi-512px.png\" width=\"75px\" />\n        </div>\n    </div>\n</div>\n\n\n    <div class=\"content-row\">\n\n        <div class=\"overall\">\n            <div class=\"status-degraded fas fa-minus-square overall-info\"></div>\n            <h1>Degraded</h1>\n            <p class=\"overall-description\">EESSI services are operational and may be used as expected, but performance may be affected.</p>\n        </div>\n\n        <div class=\"legend\">\n            \n            <span class=\"status-ok fas fa-check\"> Normal service</span>\n            \n            <span class=\"status-degraded fas fa-minus-square\"> Degraded</span>\n            \n            <span class=\"status-warning fas fa-exclamation-triangle\"> Warning</span>\n            \n            <span class=\"status-failed fas fa-times-circle\"> Failed</span>\n            \n            <span class=\"status-maintenance fas fa-hammer\"> Maintenance</span>\n            \n        </div>\n\n        <div class=\"content-left\">\n            <div id=\"stratum0_handler\" class=\"infobox\">\n                <div class=\"infoblock stratum0\">\n                    <span class=\"fas fa-database infobox-icon\"></span>\n                    <h2>Stratum0</h2>\n                    <div class=\"content-right\"><span\n                            class=\"status-ok fas fa-check infoblock-statusicon\"></span>\n                    </div>\n                </div>\n                <div id=\"stratum0\" class=\"expanded\">\n                    <ul class=\"details\">\n                        \n                        <li>alpha.test:12</li>\n                        \n                        <li>zeta.test:12</li>\n                        \n                        <ul>\n                </div>\n            </div>\n            <div id=\"stratum1_handler\" class=\"infobox\">\n                <div class=\"stratum1 infoblock\">\n                    <span class=\"fas fa-project-diagram infobox-icon\"></span>\n                    <h2>Stratum1s</h2>\n                    <div class=\"content-right\"><span\n                            class=\"status-warning fas fa-exclamation-triangle infoblock-statusicon\"></span>\n                    </div>\n                </div>\n                <div id=\"stratum1\" class=\"expanded\">\n                    <table class=\"details\">\n                        <tr>\n                            <th class=\"main\"></th>\n                            <th class=\"updates\">Updates</th>\n                            <th class=\"geoapi\">GeoAPI</th>\n                        </tr>\n\n                        \n                        <tr>\n                            <td class=\"main\">alpha.s1.test\n                                \n                            </td>\n                            <td class=\"updates\"><span class=\"status-failed fas fa-times-circle\"></span></td>\n                            <td class=\"geoapi\"><span class=\"status-ok fas fa-check\" title=\"GeoAPI response received\" aria-label=\"GeoAPI response received\"></span></td>\n                        </tr>\n                        \n                        <tr>\n                            <td class=\"main\">zulu.s1.test\n                                \n                            </td>\n                            <td class=\"updates\"><span class=\"status-ok fas fa-check\"></span></td>\n                            <td class=\"geoapi\"><span class=\"status-ok fas fa-check\" title=\"GeoAPI response received\" aria-label=\"GeoAPI response received\"></span></td>\n                        </tr>\n                        \n                    </table>\n                </div>\n\n            </div>\n        </div>\n\n        <div class=\"content-right\">\n            <div id=\"syncservers_handler\" class=\"infobox\">\n                <div class=\"syncservers infoblock\">\n                    <span class=\"fas fa-tasks infobox-icon\"></span>\n                    <h2>Syncservers</h2>\n                    <div class=\"content-right\"><span\n                            class=\"status-ok fas fa-check infoblock-statusicon\"></span>\n                    </div>\n                </div>\n\n                <div id=\"syncservers\" class=\"expanded\">\n                    <table class=\"details\">\n                        <tr>\n                            <th class=\"main\"></th>\n                            <th class=\"updates\">Updates</th>\n                            <th class=\"geoapi\">GeoAPI</th>\n                        </tr>\n\n                        \n                        <tr>\n                            <td class=\"main\">alpha.sync.test</td>\n                            <td class=\"updates\"><span class=\"status-ok fas fa-check\"></span></td>\n                            <td class=\"geoapi\"><span class=\"status-ok fas fa-check\" title=\"GeoAPI response received\" aria-label=\"GeoAPI response received\"></span></td>\n                        </tr>\n                        \n                        <tr>\n                            <td class=\"main\">zulu.sync.test</td>\n                            <td class=\"updates\"><span class=\"status-ok fas fa-check\"></span></td>\n                            <td class=\"geoapi\"><span class=\"status-ok fas fa-check\" title=\"GeoAPI response received\" aria-label=\"GeoAPI response received\"></span></td>\n                        </tr>\n                        \n                    </table>\n                </div>\n            </div>\n            <div id=\"repositories_handler\" class=\"infobox\">\n                <div class=\"repositories infoblock\">\n                    <span class=\"fas fa-folder-open infobox-icon\"></span>\n                    <h2>Repositories</h2>\n                    <div class=\"content-right\"><span\n                            class=\"status-failed fas fa-times-circle infoblock-statusicon\"></span></div>\n                </div>\n                <div id=\"repositories\" class=\"expanded\">\n                    <table class=\"details\">\n                        <tr>\n                            <th class=\"main\"></th>\n                            <th class=\"updates\">Version</th>\n                            <th class=\"geoapi\">Snapshot</th>\n                        </tr>\n\n                        \n                        <tr>\n                            <td class=\"main\">alpha.test</td>\n                            <td class=\"updates\"><span class=\"status-failed fas fa-times-circle\"></span></td>\n                            <td class=\"geoapi\"><span class=\"status-ok fas fa-check\"></span></td>\n                        </tr>\n                        \n                        <tr>\n                            <td class=\"main\">zeta.test</td>\n                            <td class=\"updates\"><span class=\"status-failed fas fa-times-circle\"></span></td>\n                            <td class=\"geoapi\"><span class=\"status-ok fas fa-check\"></span></td>\n                        </tr>\n                        \n                    </table>\n                </div>\n            </div>\n        </div>\n\n        \n    </div>\n\n    \n    \n    <div class=\"footer\">\n    Last updated <GENERATED_AT> |\n    \n    <span>status</span>\n    \n    |\n    \n    <a href=\"trends.html\">trends</a>\n    \n    | ops+o&#x27;hara@example.test\n</div>\n\n\n</body>\n\n</html>\n",
+  "metrics": "# HELP eessi_status EESSI status\n# HELP repo_catalogue_size Repository catalogue size\n# HELP repo_revision Repository revision\n# HELP repo_timestamp Repository timestamp\n# HELP repo_ttl Repository TTL\n# HELP repositories_status Repositories status\n# HELP status_overview Status overview\n# HELP stratum0_status Stratum0 status\n# HELP stratum1_status Stratum1 status\n# HELP syncservers_status SyncServers status\n# TYPE eessi_status gauge\n# TYPE repo_catalogue_size gauge\n# TYPE repo_revision gauge\n# TYPE repo_timestamp gauge\n# TYPE repo_ttl gauge\n# TYPE repositories_status gauge\n# TYPE status_overview gauge\n# TYPE stratum0_status gauge\n# TYPE stratum1_status gauge\n# TYPE syncservers_status gauge\neessi_status 1 <GENERATED_AT>\nrepo_catalogue_size{type=\"stratum0\",server=\"s0.test\",repository=\"alpha.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"stratum0\",server=\"s0.test\",repository=\"zeta.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"alpha.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"zeta.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"alpha.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"zeta.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"alpha.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"zeta.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"alpha.test\"} 4096 <GENERATED_AT>\nrepo_catalogue_size{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"zeta.test\"} 4096 <GENERATED_AT>\nrepo_revision{type=\"stratum0\",server=\"s0.test\",repository=\"alpha.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"stratum0\",server=\"s0.test\",repository=\"zeta.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"alpha.test\"} 10 <GENERATED_AT>\nrepo_revision{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"zeta.test\"} 10 <GENERATED_AT>\nrepo_revision{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"alpha.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"zeta.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"alpha.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"zeta.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"alpha.test\"} 12 <GENERATED_AT>\nrepo_revision{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"zeta.test\"} 12 <GENERATED_AT>\nrepo_timestamp{type=\"stratum0\",server=\"s0.test\",repository=\"alpha.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"stratum0\",server=\"s0.test\",repository=\"zeta.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"alpha.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"zeta.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"alpha.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"zeta.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"alpha.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"zeta.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"alpha.test\"} 1781740800 <GENERATED_AT>\nrepo_timestamp{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"zeta.test\"} 1781740800 <GENERATED_AT>\nrepo_ttl{type=\"stratum0\",server=\"s0.test\",repository=\"alpha.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"stratum0\",server=\"s0.test\",repository=\"zeta.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"alpha.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"stratum1\",server=\"alpha.s1.test\",repository=\"zeta.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"alpha.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"stratum1\",server=\"zulu.s1.test\",repository=\"zeta.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"alpha.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"syncserver\",server=\"alpha.sync.test\",repository=\"zeta.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"alpha.test\"} 60 <GENERATED_AT>\nrepo_ttl{type=\"syncserver\",server=\"zulu.sync.test\",repository=\"zeta.test\"} 60 <GENERATED_AT>\nrepositories_status 3 <GENERATED_AT>\nstatus_overview{category=\"overall\"} 1 <GENERATED_AT>\nstatus_overview{category=\"repositories\"} 3 <GENERATED_AT>\nstatus_overview{category=\"stratum0\"} 0 <GENERATED_AT>\nstatus_overview{category=\"stratum1\"} 2 <GENERATED_AT>\nstatus_overview{category=\"syncservers\"} 0 <GENERATED_AT>\nstratum0_status 0 <GENERATED_AT>\nstratum1_status 2 <GENERATED_AT>\nsyncservers_status 0 <GENERATED_AT>\n",
+  "status.json": {
+    "asset_base_url": "",
+    "config": {
+      "external_metrics": null,
+      "history": {
+        "bucket_window_days": 90,
+        "directory": "history",
+        "enabled": false,
+        "retention_days_daily": 90,
+        "retention_days_raw": 90
+      },
+      "ignored_repositories": [],
+      "limit_scraping_to_repositories": true,
+      "meta": {
+        "contact_email": "ops+o'hara@example.test",
+        "logging_level": "WARN",
+        "repo_url": "https://www.eessi.io/docs/repositories/pilot",
+        "repo_url_text": "EESSI Pilot documentation",
+        "title": "EESSI <status> & \"\u00c5/\u96ea\" 'test'"
+      },
+      "replication_grace_seconds": 0,
+      "repositories": [
+        "zeta.test",
+        "alpha.test"
+      ],
+      "rules": [
+        {
+          "conditions": [
+            {
+              "status": "FAILED",
+              "when": "stratum1_servers == 0"
+            },
+            {
+              "status": "WARNING",
+              "when": "stratum1_servers == 1"
+            },
+            {
+              "status": "DEGRADED",
+              "when": "stratum1_servers > 1 && stratum1_servers < 2"
+            },
+            {
+              "status": "OK",
+              "when": "stratum1_servers >= 2"
+            }
+          ],
+          "description": "Stratum1 servers",
+          "id": "stratum1_servers"
+        },
+        {
+          "conditions": [
+            {
+              "status": "FAILED",
+              "when": "stratum0_servers == 0"
+            },
+            {
+              "status": "OK",
+              "when": "stratum0_servers > 0"
+            }
+          ],
+          "description": "Stratum0 servers",
+          "id": "stratum0_servers"
+        },
+        {
+          "conditions": [
+            {
+              "status": "FAILED",
+              "when": "sync_servers == 0"
+            },
+            {
+              "status": "OK",
+              "when": "sync_servers > 0"
+            }
+          ],
+          "description": "Sync servers",
+          "id": "sync_servers"
+        },
+        {
+          "conditions": [
+            {
+              "status": "FAILED",
+              "when": "stratum1_servers == 0"
+            },
+            {
+              "status": "WARNING",
+              "when": "stratum0_servers == 0 && stratum1_servers > 1"
+            },
+            {
+              "status": "WARNING",
+              "when": "sync_servers == 0 && stratum1_servers > 1"
+            },
+            {
+              "status": "DEGRADED",
+              "when": "stratum0_servers == 1 && stratum1_servers == 1"
+            },
+            {
+              "status": "DEGRADED",
+              "when": "repos_out_of_sync > 1"
+            },
+            {
+              "status": "OK",
+              "when": "stratum0_servers > 0 && stratum1_servers > 1 && sync_servers > 0"
+            }
+          ],
+          "description": "EESSI status",
+          "id": "eessi_status"
+        }
+      ],
+      "servers": [
+        {
+          "backend_type": "CVMFS",
+          "hostname": "s0.test",
+          "server_type": "Stratum0"
+        },
+        {
+          "backend_type": "CVMFS",
+          "hostname": "zulu.s1.test",
+          "server_type": "Stratum1"
+        },
+        {
+          "backend_type": "CVMFS",
+          "hostname": "alpha.s1.test",
+          "server_type": "Stratum1"
+        },
+        {
+          "backend_type": "CVMFS",
+          "hostname": "zulu.sync.test",
+          "server_type": "SyncServer"
+        },
+        {
+          "backend_type": "CVMFS",
+          "hostname": "alpha.sync.test",
+          "server_type": "SyncServer"
+        }
+      ]
+    },
+    "contact_email": "ops+o'hara@example.test",
+    "eessi_status": {
+      "class": "status-degraded fas fa-minus-square",
+      "description": "EESSI services are operational and may be used as expected, but performance may be affected.",
+      "status": "DEGRADED",
+      "text": "Degraded"
+    },
+    "history_url": "history.json",
+    "last_update": "<GENERATED_AT>",
+    "legend": [
+      {
+        "class": "status-ok fas fa-check",
+        "description": "EESSI services operating without issues.",
+        "status": "OK",
+        "text": "Normal service"
+      },
+      {
+        "class": "status-degraded fas fa-minus-square",
+        "description": "EESSI services are operational and may be used as expected, but performance may be affected.",
+        "status": "DEGRADED",
+        "text": "Degraded"
+      },
+      {
+        "class": "status-warning fas fa-exclamation-triangle",
+        "description": "EESSI services are operational, but some systems may be unavailable or out of sync.",
+        "status": "WARNING",
+        "text": "Warning"
+      },
+      {
+        "class": "status-failed fas fa-times-circle",
+        "description": "EESSI services have failed.",
+        "status": "FAILED",
+        "text": "Failed"
+      },
+      {
+        "class": "status-maintenance fas fa-hammer",
+        "description": "EESSI services are unavailable due to scheduled maintenance.",
+        "status": "MAINTENANCE",
+        "text": "Maintenance"
+      }
+    ],
+    "repositories": [
+      {
+        "name": "alpha.test",
+        "revision_class": "status-failed fas fa-times-circle",
+        "snapshot_class": "status-ok fas fa-check",
+        "status": "FAILED"
+      },
+      {
+        "name": "zeta.test",
+        "revision_class": "status-failed fas fa-times-circle",
+        "snapshot_class": "status-ok fas fa-check",
+        "status": "FAILED"
+      }
+    ],
+    "repositories_enriched": [
+      {
+        "catalogue_size_bytes": 4096,
+        "divergence": 2,
+        "name": "alpha.test",
+        "status": "FAILED",
+        "stratum0_revision": 12,
+        "stratum0_timestamp": 1781740800,
+        "stratum1_max_revision": 12,
+        "stratum1_min_revision": 10,
+        "sync_lag_seconds": 0,
+        "ttl_seconds": 60
+      },
+      {
+        "catalogue_size_bytes": 4096,
+        "divergence": 2,
+        "name": "zeta.test",
+        "status": "FAILED",
+        "stratum0_revision": 12,
+        "stratum0_timestamp": 1781740800,
+        "stratum1_max_revision": 12,
+        "stratum1_min_revision": 10,
+        "sync_lag_seconds": 0,
+        "ttl_seconds": 60
+      }
+    ],
+    "repositories_status": {
+      "name": "Repositories",
+      "revision_class": "status-failed fas fa-times-circle",
+      "snapshot_class": "status-ok fas fa-check",
+      "status": "FAILED"
+    },
+    "servers": [
+      {
+        "geoapi_class": "muted fas fa-minus",
+        "geoapi_description": "GeoAPI not applicable",
+        "geoapi_status": "not_applicable",
+        "metadata": {
+          "administrator": "Fixture admin",
+          "custom": {},
+          "cvmfs_version": null,
+          "email": "admin@example.test",
+          "last_geodb_update": null,
+          "organisation": "EESSI",
+          "os_id": null,
+          "os_pretty_name": null,
+          "os_version_id": null,
+          "schema_version": 1
+        },
+        "name": "s0.test",
+        "status": "OK",
+        "update_class": "status-ok fas fa-check"
+      },
+      {
+        "geoapi_class": "status-ok fas fa-check",
+        "geoapi_description": "GeoAPI response received",
+        "geoapi_status": "available",
+        "metadata": {
+          "administrator": "Fixture admin",
+          "custom": {},
+          "cvmfs_version": null,
+          "email": "admin@example.test",
+          "last_geodb_update": null,
+          "organisation": "EESSI",
+          "os_id": null,
+          "os_pretty_name": null,
+          "os_version_id": null,
+          "schema_version": 1
+        },
+        "name": "alpha.s1.test",
+        "status": "FAILED",
+        "update_class": "status-failed fas fa-times-circle"
+      },
+      {
+        "geoapi_class": "status-ok fas fa-check",
+        "geoapi_description": "GeoAPI response received",
+        "geoapi_status": "available",
+        "metadata": {
+          "administrator": "Fixture admin",
+          "custom": {},
+          "cvmfs_version": null,
+          "email": "admin@example.test",
+          "last_geodb_update": null,
+          "organisation": "EESSI",
+          "os_id": null,
+          "os_pretty_name": null,
+          "os_version_id": null,
+          "schema_version": 1
+        },
+        "name": "alpha.sync.test",
+        "status": "OK",
+        "update_class": "status-ok fas fa-check"
+      },
+      {
+        "geoapi_class": "status-ok fas fa-check",
+        "geoapi_description": "GeoAPI response received",
+        "geoapi_status": "available",
+        "metadata": {
+          "administrator": "Fixture admin",
+          "custom": {},
+          "cvmfs_version": null,
+          "email": "admin@example.test",
+          "last_geodb_update": null,
+          "organisation": "EESSI",
+          "os_id": null,
+          "os_pretty_name": null,
+          "os_version_id": null,
+          "schema_version": 1
+        },
+        "name": "zulu.s1.test",
+        "status": "OK",
+        "update_class": "status-ok fas fa-check"
+      },
+      {
+        "geoapi_class": "status-ok fas fa-check",
+        "geoapi_description": "GeoAPI response received",
+        "geoapi_status": "available",
+        "metadata": {
+          "administrator": "Fixture admin",
+          "custom": {},
+          "cvmfs_version": null,
+          "email": "admin@example.test",
+          "last_geodb_update": null,
+          "organisation": "EESSI",
+          "os_id": null,
+          "os_pretty_name": null,
+          "os_version_id": null,
+          "schema_version": 1
+        },
+        "name": "zulu.sync.test",
+        "status": "OK",
+        "update_class": "status-ok fas fa-check"
+      }
+    ],
+    "servers_enriched": [
+      {
+        "hostname": "alpha.s1.test",
+        "repositories": [
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "alpha.test",
+            "revision": 10,
+            "timestamp": 1781740800
+          },
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "zeta.test",
+            "revision": 10,
+            "timestamp": 1781740800
+          }
+        ],
+        "server_type": "stratum1",
+        "status": "FAILED"
+      },
+      {
+        "hostname": "alpha.sync.test",
+        "repositories": [
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "alpha.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          },
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "zeta.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          }
+        ],
+        "server_type": "syncserver",
+        "status": "OK"
+      },
+      {
+        "hostname": "s0.test",
+        "repositories": [
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "alpha.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          },
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "zeta.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          }
+        ],
+        "server_type": "stratum0",
+        "status": "OK"
+      },
+      {
+        "hostname": "zulu.s1.test",
+        "repositories": [
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "alpha.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          },
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "zeta.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          }
+        ],
+        "server_type": "stratum1",
+        "status": "OK"
+      },
+      {
+        "hostname": "zulu.sync.test",
+        "repositories": [
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "alpha.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          },
+          {
+            "catalogue_size_bytes": 4096,
+            "name": "zeta.test",
+            "revision": 12,
+            "timestamp": 1781740800
+          }
+        ],
+        "server_type": "syncserver",
+        "status": "OK"
+      }
+    ],
+    "stratum0": {
+      "details": [
+        "alpha.test:12",
+        "zeta.test:12"
+      ],
+      "servers": [
+        {
+          "geoapi_class": "muted fas fa-minus",
+          "geoapi_description": "GeoAPI not applicable",
+          "geoapi_status": "not_applicable",
+          "metadata": {
+            "administrator": "Fixture admin",
+            "custom": {},
+            "cvmfs_version": null,
+            "email": "admin@example.test",
+            "last_geodb_update": null,
+            "organisation": "EESSI",
+            "os_id": null,
+            "os_pretty_name": null,
+            "os_version_id": null,
+            "schema_version": 1
+          },
+          "name": "s0.test",
+          "status": "OK",
+          "update_class": "status-ok fas fa-check"
+        }
+      ],
+      "status": "OK",
+      "status_class": "status-ok fas fa-check"
+    },
+    "stratum1": {
+      "details": [
+        "alpha.test:12",
+        "zeta.test:12"
+      ],
+      "servers": [
+        {
+          "geoapi_class": "status-ok fas fa-check",
+          "geoapi_description": "GeoAPI response received",
+          "geoapi_status": "available",
+          "metadata": {
+            "administrator": "Fixture admin",
+            "custom": {},
+            "cvmfs_version": null,
+            "email": "admin@example.test",
+            "last_geodb_update": null,
+            "organisation": "EESSI",
+            "os_id": null,
+            "os_pretty_name": null,
+            "os_version_id": null,
+            "schema_version": 1
+          },
+          "name": "alpha.s1.test",
+          "status": "FAILED",
+          "update_class": "status-failed fas fa-times-circle"
+        },
+        {
+          "geoapi_class": "status-ok fas fa-check",
+          "geoapi_description": "GeoAPI response received",
+          "geoapi_status": "available",
+          "metadata": {
+            "administrator": "Fixture admin",
+            "custom": {},
+            "cvmfs_version": null,
+            "email": "admin@example.test",
+            "last_geodb_update": null,
+            "organisation": "EESSI",
+            "os_id": null,
+            "os_pretty_name": null,
+            "os_version_id": null,
+            "schema_version": 1
+          },
+          "name": "zulu.s1.test",
+          "status": "OK",
+          "update_class": "status-ok fas fa-check"
+        }
+      ],
+      "status": "WARNING",
+      "status_class": "status-warning fas fa-exclamation-triangle"
+    },
+    "summary": {
+      "geographic_spread": {
+        "stratum1_countries": []
+      },
+      "repo_count": 2,
+      "stratum0_count": 1,
+      "stratum1_count": 2,
+      "syncserver_count": 2,
+      "total_catalogue_size_bytes": 40960,
+      "worst_sync_lag_seconds": 0
+    },
+    "syncservers": {
+      "details": [
+        "alpha.test:12",
+        "zeta.test:12"
+      ],
+      "servers": [
+        {
+          "geoapi_class": "status-ok fas fa-check",
+          "geoapi_description": "GeoAPI response received",
+          "geoapi_status": "available",
+          "metadata": {
+            "administrator": "Fixture admin",
+            "custom": {},
+            "cvmfs_version": null,
+            "email": "admin@example.test",
+            "last_geodb_update": null,
+            "organisation": "EESSI",
+            "os_id": null,
+            "os_pretty_name": null,
+            "os_version_id": null,
+            "schema_version": 1
+          },
+          "name": "alpha.sync.test",
+          "status": "OK",
+          "update_class": "status-ok fas fa-check"
+        },
+        {
+          "geoapi_class": "status-ok fas fa-check",
+          "geoapi_description": "GeoAPI response received",
+          "geoapi_status": "available",
+          "metadata": {
+            "administrator": "Fixture admin",
+            "custom": {},
+            "cvmfs_version": null,
+            "email": "admin@example.test",
+            "last_geodb_update": null,
+            "organisation": "EESSI",
+            "os_id": null,
+            "os_pretty_name": null,
+            "os_version_id": null,
+            "schema_version": 1
+          },
+          "name": "zulu.sync.test",
+          "status": "OK",
+          "update_class": "status-ok fas fa-check"
+        }
+      ],
+      "status": "OK",
+      "status_class": "status-ok fas fa-check"
+    },
+    "title": "EESSI <status> & \"\u00c5/\u96ea\" 'test'",
+    "trends_url": "trends.html"
+  },
+  "trends.html": "<!DOCTYPE html>\n<html lang=\"en\">\n\n<head>\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=yes\">\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"status.css\">\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"fa.all.min.css\">\n    <script>\n        window.TRENDS_JSON_URL = \"trends.json\";\n    </script>\n    <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n    <script src=\"trends.js\" type=\"text/javascript\"></script>\n    <title>EESSI trends!</title>\n</head>\n\n<body>\n    \n    \n    \n    \n    \n    <div class=\"header-row\">\n    <div class=\"header-text\">\n        <div class=\"content site-header\">\n            <h1 class=\"content-left\">EESSI trends!</h1>\n            <img class=\"content-right inline logo\" src=\"eessi-512px.png\" width=\"75px\" />\n        </div>\n    </div>\n</div>\n\n\n    <div class=\"content-row\">\n        \n\n        \n        <section class=\"infobox trends-section\">\n            <h2>No capacity data configured</h2>\n            <p>Enable an external metric source to render shared Stratum1 disk usage.</p>\n            <p><a href=\"index.html\">Back to status</a></p>\n        </section>\n        \n    </div>\n\n    \n    \n    <div class=\"footer\">\n    Last updated <GENERATED_AT> |\n    \n    <a href=\"index.html\">status</a>\n    \n    |\n    \n    <span>trends</span>\n    \n    | ops+o&#x27;hara@example.test\n</div>\n\n</body>\n\n</html>\n",
+  "trends.json": {
+    "asset_base_url": "",
+    "back_url": "index.html",
+    "contact_email": "ops+o'hara@example.test",
+    "external_metrics_configured": false,
+    "generated_at": "<GENERATED_AT>",
+    "status_json_url": "status.json",
+    "title": "EESSI trends!",
+    "trends_json_url": "trends.json",
+    "v": 1
+  }
+}

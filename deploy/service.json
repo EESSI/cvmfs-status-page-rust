@@ -1,0 +1,10 @@
+{
+  "public_address": "0.0.0.0:8080",
+  "operational_address": "0.0.0.0:9090",
+  "state_directory": "/var/lib/cvmfs-status",
+  "interval_seconds": 120,
+  "collection_deadline_seconds": 120,
+  "shutdown_grace_seconds": 30,
+  "override_directory": "/etc/cvmfs-status/overrides",
+  "prometheus_metrics": true
+}

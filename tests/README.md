@@ -115,3 +115,36 @@ python3 tests/test_live_scrape_compare.py
 ```
 
 [pr-events]: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
+
+## Workspace and service verification
+
+Use Python 3.11 or newer, with only the standard library. Run from the repository
+root:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-targets --all-features --locked
+cargo build --locked
+python3 tests/test_service.py
+python3 tests/test_build_context.py
+python3 tests/test_live_scrape_compare.py
+python3 tests/test_install.py
+npx --yes markdownlint-cli2 '**/*.md' '#target'
+docker build --target production -t cvmfs-status-server:test .
+python3 tests/test_container.py cvmfs-status-server:test
+docker build --target musl-check -t cvmfs-status-musl-check .
+```
+
+The service suite runs loopback fixture servers and exercises the actual installed
+binaries outside the checkout. Frozen reference provenance and exact normalization
+rules are in [the fixture README](fixtures/compatibility/README.md). It also tests
+GET/HEAD, ETags, private-path exclusion, failed publication and forced termination
+with recovery. Rust tests cover cold startup, concurrent snapshots, worker
+supervision and skipped slots, plus shared storage contracts and file-specific
+migration, locking, permissions, corruption and interruption recovery.
+
+Production-image builds and smoke tests run for every CI change on native amd64
+and arm64 runners. Musl checks in PR and release jobs retain static binary coverage.
+Release metadata selects the composition package by name rather than workspace
+package order.

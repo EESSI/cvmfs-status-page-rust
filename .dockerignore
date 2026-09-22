@@ -1,0 +1,11 @@
+**
+!Cargo.toml
+!Cargo.lock
+!config.json
+!crates/
+!crates/**
+!apps/
+!apps/**
+!Dockerfile
+!scripts/
+!scripts/check-static-binary.sh

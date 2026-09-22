@@ -1,0 +1,33 @@
+[package]
+name = "cvmfs-status-page-rust"
+default-run = "cvmfs-status-page-rust"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+status-domain.workspace = true
+status-storage.workspace = true
+status-application.workspace = true
+status-sources.workspace = true
+status-storage-fs.workspace = true
+status-presentation.workspace = true
+status-http.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+log.workspace = true
+actix-web.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+yare.workspace = true
+tempfile.workspace = true
+cvmfs_server_scraper.workspace = true
+tera.workspace = true

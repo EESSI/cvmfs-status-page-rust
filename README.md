@@ -1,8 +1,13 @@
 # Status Page Generator for EESSI
 
-This repository contains the source code for an EESSI status page generator. The
-generator scrapes servers for their status and generates a static HTML page with
-the results.
+This repository contains an EESSI status page generator and an Actix service.
+Both collect CVMFS status through the same pipeline. The generator writes a static
+site; the service publishes complete durable generations over HTTP.
+
+The service and workspace layout are currently **unreleased**. See the
+[service deployment and migration guide](docs/service.md) and
+[internal architecture](docs/architecture.md). The existing generator CLI remains
+supported.
 
 ## Current release
 
@@ -22,7 +27,7 @@ v0.0.1's original GNU assets. HTTPS continues to use the system CA certificates.
 syntax. Follow the [Tera 2 migration
 guide](https://github.com/Keats/tera/blob/master/MIGRATION.md). The bundled
 templates require no changes. Copy the updated GeoAPI cells from
-`templates/status.html` into custom templates to add tooltips and accessibility
+`crates/status-presentation/templates/status.html` into custom templates to add tooltips and accessibility
 labels. `--force-resource-creation` restores bundled templates and resources,
 overwriting local customizations.
 
@@ -345,7 +350,8 @@ conservatively until S1s catch up to that revision.
 
 Custom templates using Tera 2 syntax support replication grace. To display
 "Catching up" details in a copied template, apply the corresponding change from
-`templates/status.html`; `--force-resource-creation` replaces copied templates
+`crates/status-presentation/templates/status.html`;
+`--force-resource-creation` replaces copied templates
 and resources with the bundled versions, including any local customizations.
 
 ## Condition Evaluation for Status
@@ -489,7 +495,7 @@ tests for the musl target, then builds static Linux release binaries for x86_64
 and aarch64. It checks static linkage and runs each binary's `--version` before
 publishing the GitHub Release.
 
-1. Update `version` in `Cargo.toml` and refresh `Cargo.lock`.
+1. Update `[workspace.package].version` in `Cargo.toml` and refresh `Cargo.lock`.
 2. Move the relevant entries in `CHANGELOG.md` from `Unreleased` to a new
    `## [x.y.z] - YYYY-MM-DD` section.
 3. Update the README with the version, date, release link, pinned installation

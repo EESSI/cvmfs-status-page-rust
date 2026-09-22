@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>404 — Page not found</title>
+    <link rel="icon" href="data:,">
+    <style>
+        :root {
+            color-scheme: light;
+            --paper: #faf9f6;
+            --ink: #292a27;
+            --muted: #e7e5e0;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        main {
+            position: relative;
+            isolation: isolate;
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            min-height: 100svh;
+            padding: 3rem 1.5rem;
+            overflow: hidden;
+        }
+        .error-code {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -56%);
+            color: var(--muted);
+            font-size: clamp(12rem, 46vw, 56rem);
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -0.065em;
+            padding-right: 0.065em;
+            user-select: none;
+            pointer-events: none;
+        }
+        .message {
+            position: relative;
+            text-align: center;
+        }
+        h1 {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: clamp(3.25rem, 8.5vw, 9rem);
+            font-weight: 400;
+            font-style: italic;
+            line-height: 1.12;
+            letter-spacing: -0.045em;
+            text-wrap: balance;
+        }
+        .home-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-height: 44px;
+            margin-top: 2.5rem;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid currentColor;
+            color: inherit;
+            font-size: 0.875rem;
+            letter-spacing: 0.04em;
+            text-decoration: none;
+        }
+        .home-link:hover { border-bottom-width: 2px; }
+        .home-link:focus-visible {
+            outline: 2px solid currentColor;
+            outline-offset: 6px;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
+        @media (max-width: 480px) {
+            h1 { max-width: 7em; }
+            .home-link { margin-top: 2rem; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="error-code" aria-hidden="true">404</div>
+        <div class="message">
+            <h1><span class="visually-hidden">404: </span>Page not found</h1>
+            <a class="home-link" href="{{ home_url }}">
+                <span aria-hidden="true">←</span> Back to status
+            </a>
+        </div>
+    </main>
+</body>
+</html>

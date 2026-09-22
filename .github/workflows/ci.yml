@@ -52,10 +52,19 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Run tests
-        run: cargo test --all-targets --all-features --locked
+        run: cargo test --workspace --all-targets --all-features --locked
+
+      - name: Verify generator and HTTP compatibility
+        run: |
+          cargo build --locked
+          python3 tests/test_service.py
+          python3 tests/test_build_context.py
+
+      - name: Lint Markdown
+        run: npx --yes markdownlint-cli2 '**/*.md' '#target' '#.html-reference' '#.live-reference'
 
       # Pin pre-migration main so this remains an independent reference after merging.
       - name: Checkout HTML reference
@@ -125,13 +134,15 @@ jobs:
             cargo-${{ runner.os }}-${{ runner.arch }}-${{ env.TARGET }}-${{ steps.rust.outputs.version }}-
 
       - name: Run musl tests
-        run: cargo test --all-targets --all-features --locked --target "$TARGET"
+        run: cargo test --workspace --all-targets --all-features --locked --target "$TARGET"
 
       - name: Build release binary
         run: cargo build --release --locked --target "$TARGET"
 
       - name: Verify static binary
-        run: sh scripts/check-static-binary.sh "target/${TARGET}/release/${BINARY_NAME}"
+        run: |
+          sh scripts/check-static-binary.sh "target/${TARGET}/release/${BINARY_NAME}"
+          sh scripts/check-static-binary.sh "target/${TARGET}/release/cvmfs-status-server"
 
       - name: Package PR artifact
         env:
@@ -141,7 +152,7 @@ jobs:
           short_sha="${PR_HEAD_SHA::12}"
           package="${BINARY_NAME}-pr-${PR_NUMBER}-${short_sha}-${TARGET}"
           mkdir -p "dist/${package}"
-          cp "target/${TARGET}/release/${BINARY_NAME}" "dist/${package}/"
+          cp "target/${TARGET}/release/${BINARY_NAME}" "target/${TARGET}/release/cvmfs-status-server" "dist/${package}/"
           cp README.md CHANGELOG.md "dist/${package}/"
           tar -C dist -czf "dist/${package}.tar.gz" "${package}"
           cd dist
@@ -156,3 +167,23 @@ jobs:
             dist/*.sha256
           if-no-files-found: error
           retention-days: 14
+
+  production-image:
+    name: Production image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check workspace build context
+        run: python3 tests/test_build_context.py
+      - name: Build production image
+        run: docker build --target production -t cvmfs-status-server:test .
+      - name: Smoke test production image and recovery
+        run: python3 tests/test_container.py cvmfs-status-server:test
