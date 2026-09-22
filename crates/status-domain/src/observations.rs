@@ -1,5 +1,5 @@
 //! Validated facts accepted by health evaluation. No network adapter types escape here.
-use anyhow::{Result, ensure};
+use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

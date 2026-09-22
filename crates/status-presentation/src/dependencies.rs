@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use include_dir::{Dir, include_dir};
+use include_dir::{include_dir, Dir};
 use log::{debug, info, trace};
 use once_cell::sync::Lazy;
 use std::fs;

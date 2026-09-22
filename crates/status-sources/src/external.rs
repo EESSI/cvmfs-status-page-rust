@@ -4,8 +4,8 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-use status_application::ExternalSnapshot;
 use status_application::config::{ExternalMetricsConfig, GrafanaMetricsConfig};
+use status_application::ExternalSnapshot;
 use status_domain::models::DiskUsagePoint;
 
 #[derive(thiserror::Error, Debug)]

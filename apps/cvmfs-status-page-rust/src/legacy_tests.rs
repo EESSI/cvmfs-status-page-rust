@@ -1,8 +1,8 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use cvmfs_server_scraper::{ScrapedServer, ServerType};
-use status_application::{Observations, config, evaluate};
-use status_domain::{Health, models::StatusManager};
+use status_application::{config, evaluate, Observations};
+use status_domain::{models::StatusManager, Health};
 use status_presentation::{
     models::{self, ServerPresentation, Status, StatusPageData, StatusPresentation},
     templating,
@@ -179,15 +179,13 @@ fn empty_populated_servers_are_failed(server_type: ServerType) {
     let manager = status_manager(&[scraped], None);
 
     assert_eq!(manager.servers[0].status, Status::FAILED);
-    assert!(
-        manager
-            .get_by_type_ok(match server_type {
-                ServerType::Stratum0 => status_domain::observations::ServerType::Stratum0,
-                ServerType::Stratum1 => status_domain::observations::ServerType::Stratum1,
-                ServerType::SyncServer => status_domain::observations::ServerType::SyncServer,
-            })
-            .is_empty()
-    );
+    assert!(manager
+        .get_by_type_ok(match server_type {
+            ServerType::Stratum0 => status_domain::observations::ServerType::Stratum0,
+            ServerType::Stratum1 => status_domain::observations::ServerType::Stratum1,
+            ServerType::SyncServer => status_domain::observations::ServerType::SyncServer,
+        })
+        .is_empty());
 }
 
 #[test]
@@ -249,11 +247,9 @@ fn grace_expiry_restores_existing_severity(s0: i32, expected: Status) {
     status_manager_with_replication(&scraped, dir.path(), 600, 1000);
     let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1600);
     assert_eq!(manager.servers[1].status, expected);
-    assert!(
-        manager.servers[1].repositories[0]
-            .replication_grace
-            .is_none()
-    );
+    assert!(manager.servers[1].repositories[0]
+        .replication_grace
+        .is_none());
 }
 
 #[parameterized(
@@ -426,12 +422,10 @@ fn peer_comparison_without_s0_has_no_grace() {
         ),
     ];
     let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1000);
-    assert!(
-        manager
-            .servers
-            .iter()
-            .all(|server| server.status == Status::FAILED)
-    );
+    assert!(manager
+        .servers
+        .iter()
+        .all(|server| server.status == Status::FAILED));
 }
 
 #[test]
@@ -514,18 +508,14 @@ fn grace_is_visible_in_html_json_and_aggregate_health() {
         &Utc::now(),
         None,
     );
-    assert!(
-        metrics
-            .lines()
-            .any(|line| line.starts_with("eessi_status 0 "))
-    );
-    assert!(
-        metrics
-            .lines()
-            .any(|line| line.starts_with("repo_revision{")
-                && line.contains("s1.example.org")
-                && line.contains(" 10 "))
-    );
+    assert!(metrics
+        .lines()
+        .any(|line| line.starts_with("eessi_status 0 ")));
+    assert!(metrics
+        .lines()
+        .any(|line| line.starts_with("repo_revision{")
+            && line.contains("s1.example.org")
+            && line.contains(" 10 ")));
 }
 
 #[parameterized(

@@ -6,10 +6,10 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use status_domain::observations::ScrapedServer;
 use status_domain::{
-    Health,
     derived::{self, DerivedMetrics},
     history::Snapshot,
     models::{DiskUsagePoint, StatusManager},
+    Health,
 };
 use status_storage::{
     HistoryRequest, HistoryResult, PublicBundle, PublicPath, ReplicationRequest, Storage,

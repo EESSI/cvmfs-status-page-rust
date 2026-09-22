@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use cvmfs_status_page_rust::service::{ServiceArgs, run};
+use cvmfs_status_page_rust::service::{run, ServiceArgs};
 fn main() -> Result<()> {
     env_logger::init();
     let args = ServiceArgs::parse();

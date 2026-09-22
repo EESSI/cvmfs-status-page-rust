@@ -1,8 +1,7 @@
 //! Actix adapters for registered public artifacts and a separate operations listener.
 use actix_web::{
-    HttpRequest, HttpResponse,
-    http::{Method, header},
-    web,
+    http::{header, Method},
+    web, HttpRequest, HttpResponse,
 };
 use status_application::publication::{Operations, PublishedSite};
 use std::collections::BTreeSet;
@@ -131,7 +130,7 @@ async fn metrics(ops: web::Data<Operations>) -> HttpResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{App, test};
+    use actix_web::{test, App};
     use status_storage::{Artifact, PublicBundle, PublicPath};
     use std::collections::BTreeMap;
     const NOT_FOUND_PAGE: &str = "<!DOCTYPE html><html><body><h1>Page not found</h1></body></html>";

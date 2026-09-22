@@ -391,7 +391,7 @@ fn day_start_ts(date: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::{HISTORY_SCHEMA_VERSION, SnapshotRepo};
+    use crate::history::{SnapshotRepo, HISTORY_SCHEMA_VERSION};
 
     fn repo() -> SnapshotRepo {
         SnapshotRepo { r: 1, ts: 1, cb: 1 }

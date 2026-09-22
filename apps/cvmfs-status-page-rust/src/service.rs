@@ -1,13 +1,13 @@
-use actix_web::{App, HttpServer, web};
+use actix_web::{web, App, HttpServer};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use clap::Parser;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use status_application::{
-    Generator, OutputPaths,
     config::ConfigManager,
     publication::{Operations, PublishedSite},
+    Generator, OutputPaths,
 };
 use status_http::PublicState;
 use status_presentation::Presentation;

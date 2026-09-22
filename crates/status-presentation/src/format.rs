@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use chrono::{DateTime, NaiveDate, Utc};
 use log::{info, warn};
-use status_application::{ExternalSnapshot, OutputPaths, config};
+use status_application::{config, ExternalSnapshot, OutputPaths};
 use status_domain::observations::ServerType;
 use status_domain::{derived::DerivedMetrics, history::HistoryView};
 use std::{

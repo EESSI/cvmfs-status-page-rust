@@ -3,10 +3,10 @@ mod external;
 use anyhow::Result;
 use cvmfs_server_scraper::{FailedServer, ScrapeError, ScrapedServer, Scraper, ScraperCommon};
 use futures::{
+    future::{join_all, BoxFuture},
     FutureExt,
-    future::{BoxFuture, join_all},
 };
-use status_application::{Observations, Source, config::ConfigManager};
+use status_application::{config::ConfigManager, Observations, Source};
 use std::time::Duration;
 #[derive(Clone)]
 pub struct NetworkSource {

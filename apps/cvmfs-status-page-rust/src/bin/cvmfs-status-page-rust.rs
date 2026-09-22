@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use status_application::{Generator, OutputPaths, config::ConfigManager};
+use status_application::{config::ConfigManager, Generator, OutputPaths};
 use status_presentation::Presentation;
 use status_sources::NetworkSource;
 use std::{path::PathBuf, sync::Arc, time::Duration};

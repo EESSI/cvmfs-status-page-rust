@@ -8,8 +8,8 @@ use history::{HistoryConfig, HistoryStore};
 use serde::{Deserialize, Serialize};
 use status_domain::replication::ReplicationTracker;
 use status_storage::{
-    Backend, HistoryRequest, HistoryResult, PublicBundle, ReplicationRequest, Storage,
-    StorageError, digest,
+    digest, Backend, HistoryRequest, HistoryResult, PublicBundle, ReplicationRequest, Storage,
+    StorageError,
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -474,11 +474,9 @@ mod recovery_tests {
             servers: BTreeMap::new(),
             ext: None,
         };
-        assert!(
-            store
-                .record_history(HistoryRequest::new(snapshot, now, 90))
-                .is_err()
-        );
+        assert!(store
+            .record_history(HistoryRequest::new(snapshot, now, 90))
+            .is_err());
     }
     #[test]
     fn keeps_only_two_committed_generations() {

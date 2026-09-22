@@ -1,5 +1,5 @@
-use crate::Health;
 use crate::models::{DiskUsagePoint, Status, StatusManager, ToEESSILabel};
+use crate::Health;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};

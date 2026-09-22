@@ -7,13 +7,13 @@ pub mod prometheus;
 pub mod templating;
 use anyhow::{Context, Result};
 use format::{
-    FormatPaths, apply_urls, build_trends_data, day_start_ts, enrich_status_with_history,
-    generate_prometheus_metrics, generate_status_page_data,
+    apply_urls, build_trends_data, day_start_ts, enrich_status_with_history,
+    generate_prometheus_metrics, generate_status_page_data, FormatPaths,
 };
-use include_dir::{Dir, include_dir};
-use status_application::{Evaluation, OutputPaths, Renderer, config::ConfigManager};
+use include_dir::{include_dir, Dir};
+use status_application::{config::ConfigManager, Evaluation, OutputPaths, Renderer};
 use status_domain::history::HISTORY_SCHEMA_VERSION;
-use status_storage::{Artifact, PublicBundle, PublicPath, digest};
+use status_storage::{digest, Artifact, PublicBundle, PublicPath};
 use std::{collections::BTreeMap, fs, path::Path};
 use tera::Tera;
 const RESOURCES: Dir = include_dir!("$CARGO_MANIFEST_DIR/resources");

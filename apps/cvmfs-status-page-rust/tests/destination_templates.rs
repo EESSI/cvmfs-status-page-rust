@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use tempfile::{TempDir, tempdir};
+use tempfile::{tempdir, TempDir};
 
 struct Fixture {
     root: TempDir,
