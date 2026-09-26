@@ -1,0 +1,21 @@
+[package]
+name = "status-domain"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+log.workspace = true
+rhai.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+yare.workspace = true
+tempfile.workspace = true
