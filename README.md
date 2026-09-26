@@ -7,7 +7,8 @@ site; the service publishes complete durable generations over HTTP.
 The service and workspace layout are currently **unreleased**. See the
 [service deployment and migration guide](docs/service.md) and
 [internal architecture](docs/architecture.md). The existing generator CLI remains
-supported.
+supported, with [upgrade requirements for existing cron
+installations](#upgrading-existing-cron-installations).
 
 An experimental [embeddable framework](docs/framework.md) also accepts results
 from external collectors. Separate crates provide validated input, optional Rhai
@@ -38,6 +39,47 @@ templates require no changes. Copy the updated GeoAPI cells from
 labels. `--force-resource-creation` restores bundled templates and resources,
 overwriting local customizations.
 
+## Deployment options
+
+| Deployment | How it runs | Output and state | Availability |
+| --- | --- | --- | --- |
+| Static generator with cron or a timer | Run `cvmfs-status-page-rust` once per scheduled update; an existing web server serves the files. | `--destination` holds public files, templates and persistent state. | Available in v0.0.2 and retained on `main`. |
+| Standalone HTTP service | Run `cvmfs-status-server` continuously under a process supervisor, behind a reverse proxy. | Serves generated artifacts directly; `--state-directory` holds private state. | Unreleased; build from `main`. |
+| HTTP service in Docker/Compose | Run the same service using the supplied `Dockerfile` and `compose.yaml`. | A persistent volume holds private state; configuration and overrides are mounted read-only. | Unreleased; build the image locally. |
+
+The service is optional. Existing cron deployments can continue generating static
+files. The v0.0.2 installation commands below install the released generator;
+they do not install the unreleased service or the changes currently on `main`.
+`cargo build --release --locked` builds both CVMFS binaries from this checkout.
+See the [service guide](docs/service.md) for standalone startup, listener settings,
+Docker/Compose, template overrides, operations, and cutover/rollback instructions.
+
+### Upgrading existing cron installations
+
+The changes below apply when upgrading from v0.0.2 to the unreleased workspace
+on `main`, even if you continue using `cvmfs-status-page-rust` under cron.
+Existing CLI option names and the public HTML, JSON and Prometheus formats are
+retained. Frozen v0.0.2 output comparisons cover seven scenarios, with generated
+timestamps and unordered collections normalized. This establishes compatibility
+for those scenarios, not identical behavior for every existing deployment.
+
+- Runs acquire exclusive destination/history writer locks; an overlapping run
+  exits with an error. Schedule one writer and stop it before backups or upgrades.
+- Each server collection and the external metrics fetch have a fixed 120-second
+  deadline in the generator. Timed-out servers become failed observations. Only
+  the service exposes a configurable collection deadline.
+- Output names must be canonical relative paths: use `index.html`, not
+  `./index.html`. Reserved/conflicting paths and symlinked entries in the
+  destination's template tree are rejected. Configuration limits are stricter.
+- The destination also stores `generations/`, `committed.json`,
+  `previous-committed.json` and `.writer.lock`. Generation commits must succeed
+  before public files are exported, including with history and grace disabled.
+
+Read [Compatibility and upgrading cron installations](docs/compatibility.md)
+before replacing the binary. It lists the exact limits, filesystem requirements,
+validation steps and rollback procedure. Moving to the service additionally
+requires the [service cutover procedure](docs/service.md#cutover-and-rollback).
+
 ## Features
 
 - Scrapes server statuses and generates a static HTML status page.
@@ -49,7 +91,7 @@ overwriting local customizations.
 - Automatically populates required resources (images, fonts, CSS, JS, templates,
   etc.) into the destination directory.
 - Supports local editing of resource files, and overwriting them back to the
-  defaults with the `--force` option.
+  defaults with the `--force-resource-creation` option.
 - Evaluates rules for status conditions using [Rhai](https://rhai.rs).
 - Supports CVMFS, S3, and AutoDetect as backends for CVMFS servers.
 
@@ -142,9 +184,11 @@ C toolchain. A plain `cargo build --release` continues to use Rust's host target
 ## Configuration
 
 Create a configuration file (e.g., config.json). See [config.json](config.json)
-for an example. The only optional key is `backend_type` for servers. It defaults
-to `AutoDetect` if missing. See the section on server backend types for more
-information.
+for an example. Server `backend_type` defaults to `AutoDetect` if omitted.
+`limit_scraping_to_repositories`, `replication_grace_seconds`, `history` and
+`external_metrics` also have defaults described below. Both binaries validate
+configuration at startup; see the [configuration limits](docs/compatibility.md#configuration-and-upstream-validation)
+when upgrading.
 
 Note that `limit_scraping_to_repositories` controls how the scraper determines
 which repositories to scrape from each server. If set to `true`, only the
@@ -199,8 +243,10 @@ RUST_LOG=info ./cvmfs-status-page-rust -c config.json
 
 Resources such as images, fonts, CSS, JS, and templates will be populated into
 the destination directory from the binary if missing. These resources can be
-edited locally as their existience will prevent recreation. To reinstall the
-shipped versions, issue the --force option.
+edited locally as their existence will prevent recreation. To reinstall the
+shipped versions, use `--force-resource-creation`. This overwrites customizations.
+Use regular files in the destination's template tree; symlinked entries are
+rejected. See [template compatibility](docs/compatibility.md#output-paths-and-custom-templates).
 
 ## History and Trends
 
@@ -345,8 +391,9 @@ destination directory, independently of history collection. Preserve the file
 between runs: deleting it or changing destinations starts fresh observations.
 Run only one generator at a time per destination. If the state cannot be read or
 saved, the generator logs a warning and uses immediate revision checks for that
-run. Invalid state is preserved for inspection. Setting grace to `0` skips
-state-file access. Changes in status are visible on the next scrape.
+run. Invalid state is preserved for inspection. Setting grace to `0` skips access
+to `replication-state.json`; writer locks and generation persistence still apply.
+Changes in status are visible on the next scrape.
 
 Expired observations are compacted into a revision boundary so the state file
 does not grow with the full publication history. Those revisions remain overdue
