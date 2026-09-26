@@ -4,7 +4,13 @@ The unreleased workspace adds `cvmfs-status-server` alongside the retained
 `cvmfs-status-page-rust` generator. Both binaries use the same collection,
 evaluation, history and presentation pipeline. Existing `config.json`, public
 JSON schemas, metric families and destination template customization remain
-supported. Build both with `cargo build --release --locked`.
+supported within the [documented compatibility scope](compatibility.md#what-output-compatibility-means).
+Both binaries have [upgrade requirements](compatibility.md#changes-affecting-cron-users),
+including writer locks, path/template restrictions and configuration limits.
+The generator can still run under cron; adopting the service is optional.
+Build both with `cargo build --release --locked`. The published v0.0.2 archives
+contain only the generator; the service instructions here apply to unreleased
+source builds.
 
 ```sh
 ./target/release/cvmfs-status-server \
@@ -54,7 +60,8 @@ Overrides are loaded once at startup. Place templates under
 resources are explicitly registered; symlinks, private names, duplicate paths and
 conflicting output paths are rejected. Restart applies edits. The static generator
 continues reading custom templates and resources in its destination and supports
-`--force-resource-creation`.
+`--force-resource-creation`. Its template tree also rejects symlinked entries.
+Both binaries require [canonical relative output names](compatibility.md#output-paths-and-custom-templates).
 
 Generated paths may be nested. `/` aliases `index.html` when that artifact exists;
 it does not alias a differently named status page. Registered artifacts support
@@ -92,6 +99,8 @@ Collection starts immediately. A single supervised worker runs on the configured
 schedule, skips elapsed scheduling slots, and never overlaps generations. Network
 requests are asynchronous. Each server and the external metrics collection share
 the collection deadline; timed-out servers become fresh failed observations.
+The static generator uses a fixed 120-second collection deadline and exposes no
+option to change it; the service setting above applies only to the service.
 Persistence, evaluation and rendering run on a blocking executor, outside HTTP
 worker threads.
 
@@ -172,6 +181,10 @@ Restore ownership before restarting. Backups may contain hostnames and historica
 operational data; keep them private.
 
 ## Cutover and rollback
+
+First review the [shared compatibility and upgrade requirements](compatibility.md).
+The steps below apply when switching from static generation to the HTTP service;
+to retain cron, follow [upgrade while keeping cron](compatibility.md#upgrade-while-keeping-cron).
 
 1. Stop cron and any existing generator. Back up static output, configuration,
    history, replication state and customizations.

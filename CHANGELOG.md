@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recovery, and interrupted history maintenance recovery.
 - Non-root amd64/arm64 production images, read-only Compose deployment,
   compatibility fixtures, container smoke tests and migration guidance.
+- Deployment comparison and a [cron compatibility and upgrade guide](docs/compatibility.md)
+  covering the v0.0.2 output comparison scope, operational differences, validation
+  and rollback while retaining static generation.
 
 ### Changed
 
@@ -33,8 +36,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both binaries under `apps/cvmfs-status-page-rust`. Source templates and assets
   now live under `crates/status-presentation/`; destination customization and
   existing generator CLI options remain supported.
-- Both binaries acquire exclusive state/history writer locks. Deploy one writer;
-  stop cron before service cutover and retain state backups for rollback.
+- **Breaking for overlapping jobs:** both binaries acquire exclusive state/history
+  writer locks; a competing run exits with an error. Stop old writers before
+  upgrading, deploy one writer and retain state backups for rollback.
+- The static generator now limits each server collection and external metrics
+  fetch to 120 seconds. Timed-out servers become failed observations; only the
+  service exposes a configurable collection deadline.
+- **Breaking for some existing paths/templates:** both binaries require canonical
+  relative output names and reject reserved/conflicting paths. Use `index.html`
+  instead of `./index.html`; replace symlinked entries in the generator's template
+  tree with regular files/directories. Nested HTML templates are now loaded too.
+- **Breaking for out-of-range configurations:** both binaries validate history
+  retention/window and Grafana timeout/range limits at startup. Adjust values to
+  the [documented limits](docs/compatibility.md#configuration-and-upstream-validation).
+  Invalid upstream repository observations now make the affected server unavailable.
+- Static generation now requires durable generation commits in the destination
+  before public export, even with history and grace disabled. Allow space for
+  `generations/`, commit manifests and writer locks on writable local storage.
+  Keep internal state private when serving or copying the static site.
 - Static archives include the service binary; the installer continues installing
   the static generator. Service operational settings are separate from status
   configuration and public JSON.
