@@ -1,4 +1,6 @@
 /target
 /state/
+/feed-state/
+/feed-public/
 .DS_Store
 __pycache__/

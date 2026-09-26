@@ -148,3 +148,11 @@ Production-image builds and smoke tests run for every CI change on native amd64
 and arm64 runners. Musl checks in PR and release jobs retain static binary coverage.
 Release metadata selects the composition package by name rather than workspace
 package order.
+
+The same workspace suite covers the [generic framework](../docs/framework.md):
+validated input and Rhai isolation, per-destination grace, durable outbox leases,
+retry ordering, renderer/storage failures, private checkpoints and recovery.
+Webhook tests exercise Slack and Mattermost payloads against loopback fixtures;
+they never contact configured external destinations. `status-feed` integration
+tests run outside the checkout. Build-context tests also reject dependencies from
+generic crates to CVMFS collection and from storage contracts to orchestration.

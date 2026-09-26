@@ -9,6 +9,13 @@ The service and workspace layout are currently **unreleased**. See the
 [internal architecture](docs/architecture.md). The existing generator CLI remains
 supported.
 
+An experimental [embeddable framework](docs/framework.md) also accepts results
+from external collectors. Separate crates provide validated input, optional Rhai
+evaluation, presentation, durable storage and alert delivery. Slack and Mattermost
+webhooks support independent grace and retry policies. The `status-feed` example
+shows how another project can use these packages without CVMFS dependencies.
+These APIs remain unpublished; the CVMFS service keeps its existing behavior.
+
 ## Current release
 
 [v0.0.2](https://github.com/EESSI/cvmfs-status-page-rust/releases/tag/v0.0.2)

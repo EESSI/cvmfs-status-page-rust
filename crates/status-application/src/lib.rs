@@ -277,6 +277,14 @@ impl Generator {
     pub async fn generate(&self, deadline: Duration) -> Result<Generation> {
         let run_start = Utc::now();
         let observations = self.source.collect(deadline).await?;
+        self.generate_observed(observations, run_start).await
+    }
+    /// Embedding entry point for callers that already own collection.
+    pub async fn generate_observed(
+        &self,
+        observations: Observations,
+        run_start: DateTime<Utc>,
+    ) -> Result<Generation> {
         let generator = self.clone();
         tokio::task::spawn_blocking(move || {
             let evaluation = evaluate(

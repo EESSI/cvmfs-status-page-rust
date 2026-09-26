@@ -1,9 +1,10 @@
-//! Actix adapters for registered public artifacts and a separate operations listener.
+//! Actix routes for immutable registered public artifacts. Operational endpoints
+//! belong to each host's composition package.
 use actix_web::{
     http::{header, Method},
     web, HttpRequest, HttpResponse,
 };
-use status_application::publication::{Operations, PublishedSite};
+use status_publication::PublishedSite;
 use std::collections::BTreeSet;
 
 /// Construct once outside the Actix application factory.
@@ -104,34 +105,11 @@ fn not_found(request: &HttpRequest, state: &PublicState) -> HttpResponse {
         response.body(state.not_found_page.clone())
     }
 }
-pub fn operational_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/readyz", web::get().to(ready))
-        .route("/diagnostics", web::get().to(diagnostics))
-        .route("/metrics", web::get().to(metrics));
-}
-async fn ready(ops: web::Data<Operations>) -> HttpResponse {
-    if ops.ready() {
-        HttpResponse::Ok().finish()
-    } else {
-        HttpResponse::ServiceUnavailable().finish()
-    }
-}
-async fn diagnostics(ops: web::Data<Operations>) -> HttpResponse {
-    HttpResponse::Ok()
-        .insert_header((header::CACHE_CONTROL, "no-store"))
-        .json(ops.report())
-}
-async fn metrics(ops: web::Data<Operations>) -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("text/plain; version=0.0.4; charset=utf-8")
-        .body(ops.metrics())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use actix_web::{test, App};
-    use status_storage::{Artifact, PublicBundle, PublicPath};
+    use status_publication::{Artifact, PublicBundle, PublicPath};
     use std::collections::BTreeMap;
     const NOT_FOUND_PAGE: &str = "<!DOCTYPE html><html><body><h1>Page not found</h1></body></html>";
     #[actix_web::test]

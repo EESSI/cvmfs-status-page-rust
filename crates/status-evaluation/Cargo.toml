@@ -1,0 +1,10 @@
+[package]
+name = "status-evaluation"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+status-model.workspace = true
+rhai.workspace = true
+thiserror.workspace = true

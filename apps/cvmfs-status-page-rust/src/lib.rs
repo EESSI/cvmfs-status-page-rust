@@ -1,4 +1,5 @@
 //! Internal composition API for the static generator and service; unpublished.
+mod operations_http;
 pub mod service;
 use status_application::config::ConfigManager;
 use status_storage::{Storage, StorageError};
