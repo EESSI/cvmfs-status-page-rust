@@ -1,7 +1,10 @@
 """Regression checks for workspace boundaries and production build inputs."""
 import fnmatch
+import json
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import tomllib
 import unittest
 
@@ -9,6 +12,40 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BuildContext(unittest.TestCase):
+    def test_reference_checkouts_are_independent_cargo_workspaces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Cargo.toml").write_text((ROOT / "Cargo.toml").read_text())
+
+            def package(path, name):
+                (path / "src").mkdir(parents=True)
+                (path / "Cargo.toml").write_text(
+                    f'[package]\nname = "{name}"\nversion = "0.0.0"\n'
+                )
+                (path / "src/lib.rs").write_text("")
+
+            package(root / "crates/probe", "workspace-library")
+            package(root / "apps/cvmfs-status-page-rust", "workspace-app")
+            for workflow, directory in (
+                ("ci.yml", ".html-reference"),
+                ("live-scrape.yml", ".live-reference"),
+            ):
+                with self.subTest(directory=directory):
+                    self.assertIn(
+                        f"path: {directory}",
+                        (ROOT / ".github/workflows" / workflow).read_text(),
+                    )
+                    reference = root / directory
+                    package(reference, "reference")
+                    result = subprocess.run(
+                        ["cargo", "metadata", "--offline", "--no-deps", "--format-version=1"],
+                        cwd=reference, capture_output=True, text=True, timeout=30,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    metadata = json.loads(result.stdout)
+                    self.assertEqual(Path(metadata["workspace_root"]), reference)
+                    self.assertEqual(len(metadata["workspace_members"]), 1)
+
     def test_every_manifest_and_embedded_input_is_copied(self):
         dockerfile = (ROOT / "Dockerfile").read_text()
         copies = re.findall(r"^COPY (?!-)(.+) \\?\S+$", dockerfile, re.MULTILINE)

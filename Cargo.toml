@@ -2,6 +2,8 @@
 resolver = "2"
 members = ["crates/*", "apps/cvmfs-status-page-rust"]
 default-members = ["apps/cvmfs-status-page-rust"]
+# CI builds historical checkouts independently with their original manifests.
+exclude = [".html-reference", ".live-reference"]
 
 [workspace.package]
 version = "0.0.2"
