@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use log::info;
 use serde::Serialize;
-use status_domain::observations::ServerMetadata;
+use status_domain::observations::{RepositoryFailure, ServerMetadata};
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
@@ -122,6 +122,8 @@ pub struct ServerStatus {
     pub geoapi_description: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub replication_details: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub failed_repositories: Vec<RepositoryFailure>,
 }
 
 #[derive(Serialize)]
@@ -213,6 +215,7 @@ mod tests {
             geoapi_status: GeoapiStatus::Unavailable,
             geoapi_description: GeoapiStatus::Unavailable.description().to_string(),
             replication_details: Vec::new(),
+            failed_repositories: Vec::new(),
         };
 
         let serialized = serde_json::to_string(&status)?;

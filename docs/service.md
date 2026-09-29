@@ -47,7 +47,7 @@ working directory. The operational settings never appear in `status.json.config`
 | `trends_json_output_file` / `--trends-json-output-file` | `trends.json` |
 | `prometheus_metrics` / `--prometheus-metrics` | `false` |
 
-Intervals and collection deadlines accept 1–86400 seconds; shutdown grace accepts
+Intervals accept 1–86400 seconds; collection deadlines and shutdown grace accept
 1–3600 seconds. Use `--prometheus-metrics=false` to override a file setting.
 The existing history directory is relative to the private state directory; an
 absolute history directory retains its meaning and receives its own writer lock.
@@ -97,8 +97,13 @@ files remain private.
 
 Collection starts immediately. A single supervised worker runs on the configured
 schedule, skips elapsed scheduling slots, and never overlaps generations. Network
-requests are asynchronous. Each server and the external metrics collection share
-the collection deadline; timed-out servers become fresh failed observations.
+requests are asynchronous. One reusable scraper bounds collection to eight servers,
+four repository jobs per server and 32 requests globally. Each admitted server
+gets the configured deadline; queued servers start their timer on admission.
+Completed repositories survive timeouts, unfinished repositories become named
+failures, and discovery failures fail the server. Contact and GeoAPI failures do
+not discard successful repositories. The external metrics fetch has its own
+deadline of the same duration. See [scraper compatibility changes](compatibility.md#configuration-and-upstream-validation).
 The static generator uses a fixed 120-second collection deadline and exposes no
 option to change it; the service setting above applies only to the service.
 Persistence, evaluation and rendering run on a blocking executor, outside HTTP

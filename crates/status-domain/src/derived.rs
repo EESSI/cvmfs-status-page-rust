@@ -286,7 +286,7 @@ fn serving_status(server: &SnapshotServer, expected_repositories: &BTreeSet<&Str
     if server.s == Status::MAINTENANCE {
         return Status::MAINTENANCE;
     }
-    if server.repos.is_empty() {
+    if server.repos.is_empty() || !server.failed_repositories.is_empty() {
         return Status::FAILED;
     }
     if expected_repositories.is_empty() {
@@ -303,7 +303,7 @@ fn serving_status(server: &SnapshotServer, expected_repositories: &BTreeSet<&Str
 }
 
 fn derive_repositories(view: &HistoryView, cutoff_30: i64) -> BTreeMap<String, RepoDerived> {
-    let mut per_repo_points: BTreeMap<String, Vec<(i64, i32)>> = BTreeMap::new();
+    let mut per_repo_points: BTreeMap<String, Vec<(i64, u64)>> = BTreeMap::new();
     let mut lag_samples: BTreeMap<String, Vec<i64>> = BTreeMap::new();
 
     for snap in view.raw.iter().filter(|s| s.t >= cutoff_30) {
@@ -320,11 +320,13 @@ fn derive_repositories(view: &HistoryView, cutoff_30: i64) -> BTreeMap<String, R
                     .or_default()
                     .push((snap.t, data.r));
                 if server.server_type == "stratum1" {
-                    if let Some(s0) = stratum0_repos.get(repo) {
+                    if let Some((s0_time, time)) =
+                        stratum0_repos.get(repo).and_then(|s0| s0.ts.zip(data.ts))
+                    {
                         lag_samples
                             .entry(repo.clone())
                             .or_default()
-                            .push((s0.ts - data.ts).max(0));
+                            .push((s0_time - time).max(0));
                     }
                 }
             }
@@ -340,7 +342,7 @@ fn derive_repositories(view: &HistoryView, cutoff_30: i64) -> BTreeMap<String, R
             let last = points.last().copied();
             let revisions_per_week_30d = match (first, last) {
                 (Some((t0, r0)), Some((t1, r1))) if t1 > t0 => {
-                    Some(((r1 - r0).max(0) as f64) / ((t1 - t0) as f64 / 604_800.0))
+                    Some((r1.saturating_sub(r0) as f64) / ((t1 - t0) as f64 / 604_800.0))
                 }
                 _ => None,
             };
@@ -394,11 +396,16 @@ mod tests {
     use crate::history::{SnapshotRepo, HISTORY_SCHEMA_VERSION};
 
     fn repo() -> SnapshotRepo {
-        SnapshotRepo { r: 1, ts: 1, cb: 1 }
+        SnapshotRepo {
+            r: 1,
+            ts: Some(1),
+            cb: 1,
+        }
     }
 
     fn server(status: Status, repos: &[&str]) -> SnapshotServer {
         SnapshotServer {
+            failed_repositories: Vec::new(),
             server_type: "stratum1".to_string(),
             s: status,
             repos: repos

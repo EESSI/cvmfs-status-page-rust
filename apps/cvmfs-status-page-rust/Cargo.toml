@@ -29,5 +29,4 @@ futures.workspace = true
 [dev-dependencies]
 yare.workspace = true
 tempfile.workspace = true
-cvmfs_server_scraper.workspace = true
 tera.workspace = true

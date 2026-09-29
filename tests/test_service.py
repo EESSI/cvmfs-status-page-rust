@@ -51,8 +51,12 @@ def request(base, path, method="GET", headers=None):
 
 
 @contextmanager
-def upstream(scenario, delay=0):
+def upstream(scenario, delay=0, response=None):
     class Handler(FixtureHandler):
+        def fixture_response(self, host, path):
+            result = super().fixture_response(host, path)
+            return response(host, path, result) if response else result
+
         def do_GET(self):
             if delay:
                 time.sleep(delay)
@@ -237,6 +241,129 @@ class RunningService:
 
 
 class ServiceAcceptance(unittest.TestCase):
+    def test_partial_repository_failures_survive_through_publication(self):
+        scenario = replace(SCENARIOS[0], history=True)
+        for failure in ("http", "deadline", "timestamp", "all"):
+            with self.subTest(failure=failure):
+                def respond(host, path, result):
+                    affected = path.endswith("/.cvmfspublished") and (
+                        "/alpha.test/" in path or failure == "all")
+                    if host == "alpha.s1.test" and affected:
+                        if failure == "deadline":
+                            time.sleep(2)
+                        elif failure == "timestamp":
+                            return 200, result[1].replace("T1781740800", "T18446744073709551615")
+                        else:
+                            return 503, "Repository unavailable"
+                    return result
+
+                with tempfile.TemporaryDirectory() as tmp, upstream(scenario, response=respond) as env:
+                    root = Path(tmp)
+                    path = config_file(root, scenario)
+                    # Exercise discovery without an expected-repositories list: a
+                    # surviving repo must not make availability appear healthy.
+                    config = json.loads(path.read_text())
+                    config.update(repositories=[], limit_scraping_to_repositories=False)
+                    path.write_text(json.dumps(config))
+                    with RunningService(root, scenario, env, deadline=1) as service:
+                        service.wait()
+                        status = json.loads(request(service.public, "status.json")[2])
+                        server = next(s for s in status["servers_enriched"] if s["hostname"] == "alpha.s1.test")
+                        expected = ["alpha.test", "zeta.test"] if failure == "all" else ["alpha.test"]
+                        self.assertEqual(server["status"], "FAILED")
+                        self.assertEqual([r["name"] for r in server["failed_repositories"]], expected)
+                        self.assertTrue(all(r["error"] for r in server["failed_repositories"]))
+                        self.assertEqual([r["name"] for r in server["repositories"]],
+                                         [] if failure == "all" else ["zeta.test"])
+                        repo = next(r for r in status["repositories_enriched"] if r["name"] == "alpha.test")
+                        self.assertEqual(repo["status"], "FAILED")
+                        self.assertEqual(server["uptime"]["pct_90d"], 0)
+                        history = json.loads(request(service.public, "history.json")[2])
+                        self.assertEqual(history["servers"]["alpha.s1.test"]["bars"][-1]["s"], "FAILED")
+                        self.assertIn(b"alpha.test: Unavailable", request(service.public, "index.html")[2])
+                        metrics = request(service.public, "metrics")[2].decode()
+                        self.assertIn('repo_scrape_failed{type="stratum1",server="alpha.s1.test",repository="alpha.test"} 1', metrics)
+                    raw = json.loads((root / "state/history/snapshots.jsonl").read_text().splitlines()[-1])
+                    self.assertEqual(raw["servers"]["alpha.s1.test"]["failed_repositories"], expected)
+
+    def test_optional_probe_deadline_keeps_repositories_and_recovers(self):
+        scenario = SCENARIOS[0]
+        blocked = threading.Event()
+        blocked.set()
+
+        def respond(host, path, result):
+            if blocked.is_set() and (path.endswith("/meta.json") or "/api/v1.0/geo/" in path):
+                time.sleep(2)
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp, upstream(scenario, response=respond) as env:
+            root = Path(tmp)
+            config_file(root, scenario)
+            with RunningService(root, scenario, env, interval=3, deadline=1) as service:
+                service.wait()
+                status = json.loads(request(service.public, "status.json")[2])
+                self.assertTrue(all(s["status"] == "OK" for s in status["servers"]))
+                server = next(s for s in status["servers"] if s["name"] == "alpha.s1.test")
+                self.assertEqual(server["geoapi_status"], "unavailable")
+                self.assertIsNone(server["metadata"]["administrator"])
+                first_publication = service.wait()["runtime"]["last_publication"]
+                blocked.clear()
+                service.wait(lambda d: d["runtime"]["last_publication"] > first_publication)
+                status = json.loads(request(service.public, "status.json")[2])
+                server = next(s for s in status["servers"] if s["name"] == "alpha.s1.test")
+                self.assertEqual(server["geoapi_status"], "available")
+                self.assertEqual(server["metadata"]["administrator"], "Fixture admin")
+
+    def test_unsigned_manifest_values_and_missing_times_persist(self):
+        scenario = replace(SCENARIOS[0], history=True)
+        maximum = 2**64 - 1
+
+        def respond(host, path, result):
+            if path.endswith("/.cvmfspublished"):
+                revision = maximum - (host == "alpha.s1.test")
+                body = result[1].replace("S12\n", f"S{revision}\n")
+                body = body.replace("B4096\n", f"B{maximum}\n").replace("D60\n", "D4294967295\n")
+                return 200, body.replace("T1781740800\n", "")
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp, upstream(scenario, response=respond) as env:
+            root = Path(tmp)
+            config_file(root, scenario)
+            for _ in range(2):
+                with RunningService(root, scenario, env) as service:
+                    service.wait(lambda d: d["ready"] and d["runtime"]["last_publication"] is not None)
+                    status = json.loads(request(service.public, "status.json")[2])
+                    for server in status["servers_enriched"]:
+                        self.assertEqual(server["status"], "OK")
+                        for repo in server["repositories"]:
+                            self.assertEqual(repo["catalogue_size_bytes"], maximum)
+                            self.assertEqual(repo["revision"], maximum - (server["hostname"] == "alpha.s1.test"))
+                            self.assertIsNone(repo["timestamp"])
+                    for repo in status["repositories_enriched"]:
+                        self.assertEqual(repo["ttl_seconds"], 2**32 - 1)
+                        self.assertNotIn("sync_lag_seconds", repo)
+                    self.assertNotIn("worst_sync_lag_seconds", status["summary"])
+                    self.assertNotIn(b"repo_timestamp", request(service.public, "metrics")[2])
+            raw = [json.loads(line) for line in (root / "state/history/snapshots.jsonl").read_text().splitlines()]
+            self.assertEqual(len(raw), 2)
+            self.assertEqual(raw[-1]["servers"]["s0.test"]["repos"]["alpha.test"],
+                             {"r": maximum, "ts": None, "cb": maximum})
+            state = json.loads((root / "state/replication-state.json").read_text())
+            self.assertIn(str(maximum), state["repositories"]["alpha.test"]["revisions"])
+
+    def test_empty_repository_selection_remains_failed(self):
+        scenario = SCENARIOS[0]
+        with tempfile.TemporaryDirectory() as tmp, upstream(scenario) as env:
+            root = Path(tmp)
+            path = config_file(root, scenario)
+            config = json.loads(path.read_text())
+            config["repositories"] = []
+            path.write_text(json.dumps(config))
+            with RunningService(root, scenario, env) as service:
+                service.wait()
+                status = json.loads(request(service.public, "status.json")[2])
+                self.assertTrue(all(s["status"] == "FAILED" for s in status["servers"]))
+
     def test_unknown_public_url_displays_error(self):
         scenario = SCENARIOS[0]
         with tempfile.TemporaryDirectory() as tmp, upstream(scenario) as env:

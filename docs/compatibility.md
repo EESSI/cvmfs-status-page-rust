@@ -14,7 +14,9 @@ use the [service guide](service.md) if you want the HTTP service or Docker/Compo
 
 The generator and HTTP service share collection, health evaluation, history and
 presentation. Public HTML, `status.json`, `trends.json`, `history.json` and the
-optional Prometheus `metrics` retain their existing formats. Configuration stays
+optional Prometheus `metrics` retain their normal-output formats. Partial failures,
+missing publication times and wider unsigned values have the extensions described
+below. Configuration stays
 in `config.json`; service settings are separate and do not appear in public
 `status.json.config`. Existing history JSONL/daily formats and replication state
 version 2 remain readable. Version 1 replication state is migrated while
@@ -54,17 +56,22 @@ it to bypass a running writer.
 
 ### Collection deadline
 
-The static generator imposes a **120-second deadline on each server collection**
-and on the external metrics fetch. These run concurrently. A server exceeding
-the deadline becomes a failed observation, even if it would eventually have
-responded under the old generator. Unavailable external metrics use the existing
-history fallback when available. Stricter validation of observations can also
-turn upstream responses into failures, as described below.
+The static generator imposes a **120-second deadline on each admitted server
+collection** and on the external metrics fetch. Collection uses one shared scraper
+with at most eight servers, four repository jobs per server and 32 HTTP requests
+active at once. A queued server's deadline starts when admitted. Completed
+repositories survive the deadline; unfinished repositories are named failures.
+A timeout during discovery fails the server. Optional contact/GeoAPI timeouts
+preserve repository health. Unavailable external metrics use the existing history
+fallback when available.
 
 There is no generator CLI option to change this deadline. The HTTP service has
-`--collection-deadline-seconds`, defaulting to 120. Grafana's configured
+`--collection-deadline-seconds`, defaulting to 120 and accepting **1–3600 seconds**
+(previously up to 86400 on unreleased `main`). Reduce larger settings before
+upgrading. Grafana's configured
 `timeout_seconds` still applies within that outer deadline. Rendering, persistence
-and export are additional work, so 120 seconds is not a maximum process runtime;
+and export are additional work, and servers beyond the first eight queue for
+admission, so 120 seconds is not a maximum process runtime;
 a cron job scheduled every two minutes can still overlap.
 
 ### Output paths and custom templates
@@ -109,15 +116,66 @@ apply even to configured history settings when history is disabled:
 | `external_metrics.stratum1_disk_usage.range_weeks` | Integer from 1 through 5200, when Grafana is configured |
 
 All four rule IDs must be present: `eessi_status`, `stratum0_servers`,
-`stratum1_servers` and `sync_servers`. Explicit S3 servers continue to require
-configured repositories. Existing defaults satisfy these limits. Previously
+`stratum1_servers` and `sync_servers`. Explicit S3 servers require a nonempty
+effective repository selection after exclusions. With
+`limit_scraping_to_repositories: true`, exclusions do not affect selection.
+Existing defaults satisfy these limits. Previously
 accepted out-of-range settings now fail at startup, including with `--show-config`.
 
-The source adapter also validates parsed upstream observations before evaluation.
-Negative revisions, catalogue sizes or TTLs, invalid manifest timestamps,
-empty/control-character repository names and duplicate repository observations
-make the affected server unavailable. Such responses are not covered by the
-normal-output equivalence claim.
+The crates.io `cvmfs_server_scraper` 0.1.0 migration adds these checks and transport
+changes. Review configuration and upstream responses before upgrading:
+
+- Legacy `hostname` entries remain supported and retain that shape in
+  `--show-config` and public JSON. They use HTTP. Alternatively specify an
+  `endpoint`, such as `https://stratum1.example.org:8443`, with no credentials,
+  base path, query or fragment. Use exactly one address field. Endpoints support
+  DNS names and IPv4; IPv6 cannot yet be represented in this application's
+  history/public identity. Hostnames are canonicalized to lowercase and must be
+  unique even across different schemes, ports or server types.
+- Repository names must be 1–255 ASCII letters, digits, dots, underscores or
+  hyphens, without empty dot-separated components. Configured names, including
+  ignored names, are checked at startup; at most 10000 configured names are
+  accepted. Discovery is also limited to 10000 repositories per server.
+- Redirects are disabled. Point `endpoint` at the final HTTP(S) origin or fix the
+  upstream configuration. AutoDetect assumes S3 only on an index **HTTP 404**;
+  timeouts, other HTTP errors and malformed indexes fail discovery.
+- HTTP connect/read/whole-request timeouts are 5/10/30 seconds, within the server
+  deadline. Response caps are 2 MiB for indexes, 256 KiB for metadata/status,
+  1 MiB for manifests and 16 KiB for GeoAPI. These limits and concurrency defaults
+  are not exposed as application settings.
+- Manifests use validated hashes, unsigned numbers and repository-name binding.
+  Malformed data, mismatched names and unrepresentable publication timestamps
+  fail the individual repository. Binary signature bytes are preserved by the
+  parser, but signatures are not cryptographically verified. GeoAPI responses
+  must be valid permutations; malformed responses show unavailable.
+
+### Partial results and optional publication times
+
+Successful repositories remain visible when another selected repository fails.
+The server and affected repository overview report `FAILED`; availability history
+counts the sample as an outage even when discovery has no configured expected
+list. HTML shows named unavailable repositories. Public `servers` and
+`servers_enriched` entries add a nonempty `failed_repositories` array of
+`{name, error}` objects, and raw history adds the failed names. Prometheus adds
+`repo_scrape_failed{type,server,repository} 1` only for failed repository scrapes.
+Failures before repository selection still produce a failed server without named
+repository results. Empty selections and all-failed selections remain failed.
+Optional contact or GeoAPI failures do not fail successful repositories.
+
+Revision and catalogue-size values now retain the full `u64` range throughout
+evaluation, JSON and persistence; TTLs retain `u32`. Metrics remain floating point,
+so very large integers have the usual Prometheus precision limits. Consumers of
+JSON should likewise avoid narrowing these values to signed 32-bit integers.
+An absent manifest `T` field is valid: enriched repository `timestamp` and raw
+history `ts` become `null`, timestamp metrics are omitted, and lag calculations
+use only known timestamp pairs. Revision comparisons and grace still operate.
+Update custom templates and JSON consumers to accept nullable publication times
+and optional failure arrays; no failures or zero timestamps are fabricated.
+
+Existing history and replication state remain readable. Older binaries may not
+read newly recorded null timestamps or revisions above their signed range, and
+may ignore partial-failure information. Restore the complete pre-upgrade state
+backup when rolling back, as described below.
 
 ### Destination storage and publication
 

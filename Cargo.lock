@@ -577,7 +577,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "cvmfs_server_scraper",
  "env_logger",
  "futures",
  "log",
@@ -598,13 +597,12 @@ dependencies = [
 
 [[package]]
 name = "cvmfs_server_scraper"
-version = "0.0.7"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99aa275f3775e5cc24e596fd3e80a84700a6a714f8edc2ee308b8636cef5e590"
+checksum = "61c73c0f0b2b90ffd0c6db0956af3e21c217984e4219f7fb2c0a84b7d99ad779"
 dependencies = [
  "chrono",
  "futures",
- "lazy_static",
  "log",
  "rand",
  "reqwest",
@@ -613,7 +611,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "yare",
 ]
 
 [[package]]
@@ -1399,12 +1396,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4345964bb142484797b161f473a503a434de77149dd8c7427788c6e13379388"
 
 [[package]]
-name = "lazy_static"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2013,6 +2004,10 @@ name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "serde"

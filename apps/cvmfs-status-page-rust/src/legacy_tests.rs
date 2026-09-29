@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use cvmfs_server_scraper::{ScrapedServer, ServerType};
 use status_application::{config, evaluate, Observations};
+use status_domain::observations::{ScrapedServer, ServerType};
 use status_domain::{models::StatusManager, Health};
 use status_presentation::{
     models::{self, ServerPresentation, Status, StatusPageData, StatusPresentation},
@@ -24,11 +24,7 @@ fn status_manager_with_replication(
     evaluate(
         &config,
         &store,
-        Observations::new(
-            status_sources::observations(servers.to_vec()).unwrap(),
-            None,
-        )
-        .unwrap(),
+        Observations::new(servers.to_vec(), None).unwrap(),
         now,
         now,
     )
@@ -50,9 +46,8 @@ fn generate_status_page_data(
     status_presentation::format::generate_status_page_data(config, manager, &health, Utc::now())
 }
 
-use cvmfs_server_scraper::{
-    FailedServer, GeoapiServerQuery, Hostname, Manifest, ManifestError, MaybeRfc2822DateTime,
-    PopulatedRepositoryOrReplica, PopulatedServer, ServerBackendType, ServerMetadata,
+use status_domain::observations::{
+    Manifest, PopulatedRepositoryOrReplica, ServerBackendType, ServerIdentity,
 };
 use std::fs;
 use yare::parameterized;
@@ -60,52 +55,42 @@ use yare::parameterized;
 fn populated_server(
     hostname: &str,
     server_type: ServerType,
-    revisions: &[(&str, i32)],
+    revisions: &[(&str, u64)],
 ) -> ScrapedServer {
-    let hostname: Hostname = hostname.parse().unwrap();
-    ScrapedServer::Populated(Box::new(PopulatedServer {
+    populated_with_backend(
+        hostname,
         server_type,
-        backend_type: ServerBackendType::CVMFS,
-        backend_detected: ServerBackendType::CVMFS,
-        hostname: hostname.clone(),
-        repositories: revisions
+        revisions,
+        ServerBackendType::CVMFS,
+        false,
+    )
+}
+
+fn populated_with_backend(
+    hostname: &str,
+    server_type: ServerType,
+    revisions: &[(&str, u64)],
+    backend: ServerBackendType,
+    geoapi: bool,
+) -> ScrapedServer {
+    ScrapedServer::populated(
+        ServerIdentity::new(hostname.parse().unwrap(), server_type, backend),
+        backend,
+        revisions
             .iter()
             .map(|(name, revision)| {
-                let manifest: Manifest = serde_json::from_str(
-                    &serde_json::json!({
-                        "c": "00", "b": 1, "a": false, "r": "00", "x": "00",
-                        "g": false, "h": "00", "t": 500, "d": 60, "s": revision,
-                        "n": name, "m": "00", "y": "00", "l": "", "signature": ""
-                    })
-                    .to_string(),
+                PopulatedRepositoryOrReplica::new(
+                    name.to_string(),
+                    Manifest::new(*revision, Some(500), 1, 60).unwrap(),
                 )
-                .unwrap();
-                PopulatedRepositoryOrReplica {
-                    name: name.to_string(),
-                    manifest,
-                    last_snapshot: None,
-                    last_gc: None,
-                }
+                .unwrap()
             })
             .collect(),
-        metadata: ServerMetadata {
-            schema_version: None,
-            cvmfs_version: None,
-            last_geodb_update: MaybeRfc2822DateTime(None),
-            os_version_id: None,
-            os_pretty_name: None,
-            os_id: None,
-            administrator: None,
-            email: None,
-            organisation: None,
-            custom: None,
-        },
-        geoapi: GeoapiServerQuery {
-            hostname,
-            geoapi_hosts: vec![],
-            response: vec![],
-        },
-    }))
+        Vec::new(),
+        serde_json::json!({}),
+        geoapi,
+    )
+    .unwrap()
 }
 
 #[parameterized(
@@ -120,12 +105,13 @@ fn geoapi_indicators_follow_scrape_results(
     response: Vec<u32>,
     expected: models::GeoapiStatus,
 ) {
-    let mut scraped = populated_server("server.example.org", server_type, &[("repo", 12)]);
-    if let ScrapedServer::Populated(server) = &mut scraped {
-        server.backend_type = ServerBackendType::AutoDetect;
-        server.backend_detected = backend;
-        server.geoapi.response = response;
-    }
+    let scraped = populated_with_backend(
+        "server.example.org",
+        server_type,
+        &[("repo", 12)],
+        backend,
+        !response.is_empty(),
+    );
     let manager = status_manager(&[scraped], None);
     let row = manager.get_server_status_for_all().remove(0);
     assert_eq!(row.geoapi_status, expected);
@@ -147,9 +133,13 @@ fn failed_scrapes_do_not_show_green_geoapi() {
 #[test]
 fn geoapi_can_be_available_while_revision_health_is_failed() {
     let mut scraped = revision_pair(12, 10);
-    if let ScrapedServer::Populated(server) = &mut scraped[1] {
-        server.geoapi.response = vec![1, 2, 3];
-    }
+    scraped[1] = populated_with_backend(
+        "s1.example.org",
+        ServerType::Stratum1,
+        &[("repo", 10)],
+        ServerBackendType::CVMFS,
+        true,
+    );
     let manager = status_manager(&scraped, None);
     let row = manager.servers[1].to_server_status();
     assert_eq!(row.status, Status::FAILED);
@@ -157,12 +147,11 @@ fn geoapi_can_be_available_while_revision_health_is_failed() {
 }
 
 fn failed_server(hostname: &str, server_type: ServerType) -> ScrapedServer {
-    ScrapedServer::Failed(FailedServer {
-        hostname: hostname.parse().unwrap(),
+    ScrapedServer::failed(ServerIdentity::new(
+        hostname.parse().unwrap(),
         server_type,
-        backend_type: ServerBackendType::CVMFS,
-        error: ManifestError::MissingField('S').into(),
-    })
+        ServerBackendType::CVMFS,
+    ))
 }
 
 #[parameterized(
@@ -171,11 +160,13 @@ fn failed_server(hostname: &str, server_type: ServerType) -> ScrapedServer {
         syncserver = { ServerType::SyncServer }
     )]
 fn empty_populated_servers_are_failed(server_type: ServerType) {
-    let mut scraped = populated_server("empty.example.org", server_type, &[]);
-    if let ScrapedServer::Populated(server) = &mut scraped {
-        server.backend_type = ServerBackendType::AutoDetect;
-        server.backend_detected = ServerBackendType::S3;
-    }
+    let scraped = populated_with_backend(
+        "empty.example.org",
+        server_type,
+        &[],
+        ServerBackendType::S3,
+        false,
+    );
     let manager = status_manager(&[scraped], None);
 
     assert_eq!(manager.servers[0].status, Status::FAILED);
@@ -209,7 +200,7 @@ fn empty_scrapes_cannot_make_configured_health_rules_green() {
     assert_eq!(data.syncservers.status, Status::FAILED);
 }
 
-fn revision_pair(s0: i32, s1: i32) -> Vec<ScrapedServer> {
+fn revision_pair(s0: u64, s1: u64) -> Vec<ScrapedServer> {
     vec![
         populated_server("s0.example.org", ServerType::Stratum0, &[("repo", s0)]),
         populated_server("s1.example.org", ServerType::Stratum1, &[("repo", s1)]),
@@ -226,8 +217,8 @@ fn revision_pair(s0: i32, s1: i32) -> Vec<ScrapedServer> {
         disabled_failure = { 20, 10, 0, Status::FAILED }
     )]
 fn replication_grace_affects_only_replicas_behind_s0(
-    s0: i32,
-    s1: i32,
+    s0: u64,
+    s1: u64,
     seconds: u64,
     expected: Status,
 ) {
@@ -241,7 +232,7 @@ fn replication_grace_affects_only_replicas_behind_s0(
 }
 
 #[parameterized(one_behind = { 11, Status::WARNING }, many_behind = { 20, Status::FAILED })]
-fn grace_expiry_restores_existing_severity(s0: i32, expected: Status) {
+fn grace_expiry_restores_existing_severity(s0: u64, expected: Status) {
     let dir = tempfile::tempdir().unwrap();
     let scraped = revision_pair(s0, 10);
     status_manager_with_replication(&scraped, dir.path(), 600, 1000);
@@ -258,7 +249,7 @@ fn grace_expiry_restores_existing_severity(s0: i32, expected: Status) {
         at_second_deadline = { 101, 2080, Status::WARNING, None }
     )]
 fn oldest_missing_revision_controls_grace(
-    s1: i32,
+    s1: u64,
     now: i64,
     expected: Status,
     remaining: Option<u64>,
@@ -286,7 +277,7 @@ fn continuous_publishing_allows_progress_without_full_catchup() {
             &revision_pair(101 + offset, 100 + offset),
             dir.path(),
             600,
-            1000 + i64::from(offset) * 480,
+            1000 + i64::try_from(offset).unwrap() * 480,
         );
         assert_eq!(manager.servers[1].status, Status::OK);
         assert_eq!(
@@ -525,7 +516,7 @@ fn grace_is_visible_in_html_json_and_aggregate_health() {
         catching_up = { 20, 600, Status::OK, 0 }
     )]
 fn repository_overview_and_metrics_follow_replica_health(
-    s0_revision: i32,
+    s0_revision: u64,
     grace_seconds: u64,
     expected: Status,
     metric_level: i32,
@@ -601,8 +592,5 @@ fn status_manager(
     servers: &[ScrapedServer],
     tracker: Option<&mut status_domain::replication::ReplicationTracker>,
 ) -> StatusManager {
-    StatusManager::new(
-        &status_sources::observations(servers.to_vec()).unwrap(),
-        tracker,
-    )
+    StatusManager::new(servers, tracker)
 }

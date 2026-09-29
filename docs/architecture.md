@@ -22,9 +22,15 @@ compatibility pipeline. Reusable public artifacts now live in
 
 Domain observations have private fields and fallible constructors. The source
 adapter converts parsed upstream data once; health evaluation consumes the
-validated facts. Legacy configuration uses the scraper's configuration types as
-an explicit input integration surface. The validated configuration wrapper is
+validated facts. An application-owned server configuration wrapper preserves
+legacy hostname serialization while accepting explicit HTTP(S) endpoints. Typed
+repository selection is validated at startup. The validated configuration wrapper is
 immutable and passed explicitly; there is no global configuration.
+
+The network source reuses one validated scraper/client and request budget across
+servers and cycles. Per-server deadlines retain completed repositories. Conversion
+preserves named failures separately from successes; unsigned revisions and optional
+publication times remain typed facts through evaluation and persistence.
 
 `status-storage` depends only on domain models and supporting libraries. Application
 services cannot import the file adapter. The composition package creates a

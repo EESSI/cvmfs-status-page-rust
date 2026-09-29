@@ -4,7 +4,7 @@ use std::ops::Bound::{Excluded, Unbounded};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicationGrace {
-    pub oldest_missing_revision: i32,
+    pub oldest_missing_revision: u64,
     pub first_observed_at: i64,
     pub remaining_seconds: u64,
     pub revisions_behind: u64,
@@ -18,12 +18,12 @@ pub struct ReplicationState {
 
 #[derive(Debug, Clone, Default)]
 struct RevisionHistory {
-    expired_through: Option<i32>,
-    revisions: BTreeMap<i32, i64>,
+    expired_through: Option<u64>,
+    revisions: BTreeMap<u64, i64>,
 }
 
 impl RevisionHistory {
-    fn record(&mut self, revision: i32, first_seen: i64) {
+    fn record(&mut self, revision: u64, first_seen: i64) {
         let highest_known = self
             .revisions
             .keys()
@@ -79,7 +79,7 @@ impl ReplicationTracker {
     }
     /// Record S0 independently of S1 health, including when every S1 is current
     /// or unreachable. Skipped revisions share the next observed revision's time.
-    pub fn observe_stratum0(&mut self, repository: &str, revision: i32) {
+    pub fn observe_stratum0(&mut self, repository: &str, revision: u64) {
         if self.grace_seconds == 0 {
             return;
         }
@@ -102,8 +102,8 @@ impl ReplicationTracker {
     pub fn grace_for(
         &self,
         repository: &str,
-        revision: i32,
-        stratum0_revision: Option<i32>,
+        revision: u64,
+        stratum0_revision: Option<u64>,
     ) -> Option<ReplicationGrace> {
         let stratum0_revision = stratum0_revision?;
         if revision >= stratum0_revision || self.grace_seconds == 0 {
@@ -130,7 +130,7 @@ impl ReplicationTracker {
             oldest_missing_revision: revision + 1,
             first_observed_at,
             remaining_seconds,
-            revisions_behind: (i64::from(stratum0_revision) - i64::from(revision)) as u64,
+            revisions_behind: stratum0_revision - revision,
         })
     }
 }
@@ -148,13 +148,12 @@ impl ReplicationState {
     ) -> anyhow::Result<Self> {
         for (name, observations) in &repositories {
             anyhow::ensure!(
-                !name.is_empty() && observations.expired_through.is_none_or(|r| r >= 0),
+                !name.is_empty(),
                 "invalid replication repository or revision"
             );
             for (&revision, &time) in &observations.revisions {
                 anyhow::ensure!(
-                    revision >= 0
-                        && observations.expired_through.is_none_or(|r| revision > r)
+                    observations.expired_through.is_none_or(|r| revision > r)
                         && chrono::DateTime::from_timestamp(time, 0).is_some(),
                     "invalid replication observation"
                 );
@@ -200,20 +199,20 @@ impl ReplicationState {
 }
 /// Raw construction input; ReplicationState validates it before health evaluation.
 pub struct RevisionObservations {
-    expired_through: Option<i32>,
-    revisions: BTreeMap<i32, i64>,
+    expired_through: Option<u64>,
+    revisions: BTreeMap<u64, i64>,
 }
 impl RevisionObservations {
-    pub fn new(expired_through: Option<i32>, revisions: BTreeMap<i32, i64>) -> Self {
+    pub fn new(expired_through: Option<u64>, revisions: BTreeMap<u64, i64>) -> Self {
         Self {
             expired_through,
             revisions,
         }
     }
-    pub fn expired_through(&self) -> Option<i32> {
+    pub fn expired_through(&self) -> Option<u64> {
         self.expired_through
     }
-    pub fn revisions(&self) -> &BTreeMap<i32, i64> {
+    pub fn revisions(&self) -> &BTreeMap<u64, i64> {
         &self.revisions
     }
 }

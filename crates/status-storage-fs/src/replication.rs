@@ -20,8 +20,8 @@ use status_domain::replication::RevisionObservations;
 use std::collections::BTreeMap;
 #[derive(Serialize, Deserialize)]
 struct WireHistory {
-    expired_through: Option<i32>,
-    revisions: BTreeMap<i32, i64>,
+    expired_through: Option<u64>,
+    revisions: BTreeMap<u64, i64>,
 }
 #[derive(Serialize, Deserialize)]
 struct WireState {
@@ -108,6 +108,26 @@ mod tests {
     }
 
     use yare::parameterized;
+
+    #[test]
+    fn maximum_revision_survives_persistence_and_expiry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("state.json");
+        let mut tracker = ReplicationTracker::load(&path, 600, 1000).unwrap();
+        tracker.observe_stratum0("repo", u64::MAX);
+        tracker.save(&path).unwrap();
+        let tracker = ReplicationTracker::load(&path, 600, 1100).unwrap();
+        let grace = tracker
+            .grace_for("repo", u64::MAX - 1, Some(u64::MAX))
+            .unwrap();
+        assert_eq!(grace.oldest_missing_revision, u64::MAX);
+        assert_eq!(grace.revisions_behind, 1);
+        assert_eq!(grace.remaining_seconds, 500);
+        let expired = ReplicationTracker::load(&path, 600, 1600).unwrap();
+        expired.save(&path).unwrap();
+        let restored = ReplicationTracker::load(&path, 600, 1700).unwrap();
+        assert!(restored.grace_for("repo", 0, Some(u64::MAX)).is_none());
+    }
 
     #[parameterized(
         within_default = { 600, 599, Some(1) },

@@ -268,11 +268,21 @@ mod tests {
 
     fn server(status: Status, repos: &[&str]) -> SnapshotServer {
         SnapshotServer {
+            failed_repositories: Vec::new(),
             server_type: "stratum1".to_string(),
             s: status,
             repos: repos
                 .iter()
-                .map(|repo| ((*repo).to_string(), SnapshotRepo { r: 1, ts: 1, cb: 1 }))
+                .map(|repo| {
+                    (
+                        (*repo).to_string(),
+                        SnapshotRepo {
+                            r: 1,
+                            ts: Some(1),
+                            cb: 1,
+                        },
+                    )
+                })
                 .collect(),
         }
     }

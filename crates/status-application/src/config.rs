@@ -5,11 +5,72 @@ use std::path::PathBuf;
 
 pub use status_domain::rules::{Condition, Rule};
 
-use cvmfs_server_scraper::{Server, ServerBackendType};
+use cvmfs_server_scraper::{
+    Hostname as ScraperHostname, RepositoryName, RepositorySelection, Server, ServerBackendType,
+    ServerEndpoint, ServerType,
+};
+use status_domain::observations::Hostname;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone)]
 pub struct ConfigManager {
     config: ConfigFile,
+    selection: RepositorySelection,
+}
+
+/// Application-owned configuration preserves legacy hostname serialization.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(try_from = "ServerConfigInput", into = "ServerConfigInput")]
+pub struct ServerConfig {
+    server: Server,
+    legacy_hostname: bool,
+}
+#[derive(Deserialize, Serialize)]
+struct ServerConfigInput {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hostname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    endpoint: Option<String>,
+    server_type: ServerType,
+    #[serde(default)]
+    backend_type: ServerBackendType,
+}
+impl TryFrom<ServerConfigInput> for ServerConfig {
+    type Error = anyhow::Error;
+    fn try_from(input: ServerConfigInput) -> anyhow::Result<Self> {
+        let (endpoint, legacy_hostname): (ServerEndpoint, _) =
+            match (input.hostname, input.endpoint) {
+                (Some(hostname), None) => {
+                    let hostname: ScraperHostname = hostname.parse()?;
+                    (format!("http://{hostname}").parse()?, true)
+                }
+                (None, Some(endpoint)) => (endpoint.parse()?, false),
+                _ => anyhow::bail!("specify exactly one of hostname or endpoint"),
+            };
+        // History and public identifiers remain DNS names or IPv4 addresses.
+        endpoint.host().parse::<Hostname>()?;
+        Ok(Self {
+            server: Server::new(input.server_type, input.backend_type, endpoint),
+            legacy_hostname,
+        })
+    }
+}
+impl From<ServerConfig> for ServerConfigInput {
+    fn from(config: ServerConfig) -> Self {
+        Self {
+            hostname: config
+                .legacy_hostname
+                .then(|| config.server.hostname().to_owned()),
+            endpoint: (!config.legacy_hostname).then(|| config.server.endpoint().to_string()),
+            server_type: config.server.server_type(),
+            backend_type: config.server.backend_type(),
+        }
+    }
+}
+impl ServerConfig {
+    pub fn scraper_server(&self) -> &Server {
+        &self.server
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -64,7 +125,7 @@ fn default_step() -> String {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFile {
     pub meta: ConfigSection,
-    pub servers: Vec<Server>,
+    pub servers: Vec<ServerConfig>,
     pub repositories: Vec<String>,
     #[serde(default = "scrape_only_explicit_repositories")]
     pub limit_scraping_to_repositories: bool,
@@ -137,12 +198,36 @@ impl ConfigManager {
         )?))?)
     }
     pub fn try_from_config(config: ConfigFile) -> anyhow::Result<Self> {
+        let mut hosts = BTreeSet::new();
         for server in &config.servers {
-            server
-                .hostname
-                .to_str()
-                .parse::<status_domain::observations::Hostname>()?;
+            anyhow::ensure!(
+                hosts.insert(server.scraper_server().hostname()),
+                "duplicate server hostname: {}",
+                server.scraper_server().hostname()
+            );
         }
+        let repositories = config
+            .repositories
+            .iter()
+            .map(|name| name.parse::<RepositoryName>())
+            .collect::<Result<Vec<_>, _>>()?;
+        let ignored = config
+            .ignored_repositories
+            .iter()
+            .map(|name| name.parse::<RepositoryName>())
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        anyhow::ensure!(
+            repositories.len() + ignored.len() <= 10_000,
+            "too many configured repositories"
+        );
+        let effective_s3 = repositories
+            .iter()
+            .any(|name| config.limit_scraping_to_repositories || !ignored.contains(name));
+        let selection = if config.limit_scraping_to_repositories {
+            RepositorySelection::only(repositories)
+        } else {
+            RepositorySelection::discover(repositories, ignored)
+        };
         anyhow::ensure!(
             config.history.retention_days_raw <= 36500
                 && config.history.retention_days_daily <= 36500,
@@ -162,9 +247,9 @@ impl ConfigManager {
             !config
                 .servers
                 .iter()
-                .any(|s| s.backend_type == ServerBackendType::S3)
-                || !config.repositories.is_empty(),
-            "S3 servers require explicit repositories"
+                .any(|s| s.scraper_server().backend_type() == ServerBackendType::S3)
+                || effective_s3,
+            "S3 servers require a nonempty effective repository selection"
         );
         anyhow::ensure!(
             config.history.bucket_window_days > 0 && config.history.bucket_window_days <= 36500,
@@ -178,7 +263,10 @@ impl ConfigManager {
         ] {
             anyhow::ensure!(config.rules.iter().any(|r| r.id == id), "missing rule {id}");
         }
-        Ok(Self { config })
+        Ok(Self { config, selection })
+    }
+    pub fn repository_selection(&self) -> &RepositorySelection {
+        &self.selection
     }
     pub fn as_json(&self) -> String {
         serde_json::to_string_pretty(&self.config).expect("serializable configuration")
@@ -197,8 +285,70 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cvmfs_server_scraper::{Hostname, ServerType};
     use yare::parameterized;
+
+    #[parameterized(
+        legacy = { "hostname", "EXAMPLE.COM", "example.com" },
+        endpoint = { "endpoint", "https://EXAMPLE.COM:8443/", "https://example.com:8443/" }
+    )]
+    fn server_address_round_trip(field: &str, input: &str, expected: &str) {
+        let value =
+            serde_json::json!({field: input, "server_type":"Stratum1", "backend_type":"CVMFS"});
+        let config: ServerConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(config.scraper_server().hostname(), "example.com");
+        let serialized = serde_json::to_value(config).unwrap();
+        assert_eq!(serialized[field], expected);
+        assert_eq!(serialized.as_object().unwrap().len(), 3);
+    }
+
+    #[parameterized(
+        both = { serde_json::json!({"hostname":"example.com", "endpoint":"https://example.com"}) },
+        neither = { serde_json::json!({}) },
+        path = { serde_json::json!({"endpoint":"https://example.com/path"}) },
+        ipv6 = { serde_json::json!({"endpoint":"http://[::1]"}) }
+    )]
+    fn rejects_unsupported_addresses(input: serde_json::Value) {
+        let mut input = input;
+        input["server_type"] = "Stratum1".into();
+        assert!(serde_json::from_value::<ServerConfig>(input).is_err());
+    }
+
+    #[test]
+    fn rejects_endpoints_with_the_same_public_identity() {
+        let mut config: ConfigFile =
+            serde_json::from_str(include_str!("../../../config.json")).unwrap();
+        config.servers = serde_json::from_value(serde_json::json!([
+            {"hostname":"example.com", "server_type":"Stratum0"},
+            {"endpoint":"https://EXAMPLE.COM:8443", "server_type":"Stratum1"}
+        ]))
+        .unwrap();
+        assert!(ConfigManager::try_from_config(config)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate"));
+    }
+
+    #[parameterized(traversal = { "../repo" }, slash = { "repo/path" }, empty = { "" })]
+    fn validates_repository_selection(name: &str) {
+        let mut config: ConfigFile =
+            serde_json::from_str(include_str!("../../../config.json")).unwrap();
+        config.repositories = vec![name.into()];
+        assert!(ConfigManager::try_from_config(config).is_err());
+    }
+
+    #[parameterized(discovery_excludes = { false, false }, only_ignores_excludes = { true, true })]
+    fn s3_requires_an_effective_repository(only: bool, accepted: bool) {
+        let mut config: ConfigFile =
+            serde_json::from_str(include_str!("../../../config.json")).unwrap();
+        config.servers = serde_json::from_value(serde_json::json!([
+            {"hostname":"example.com", "server_type":"Stratum1", "backend_type":"S3"}
+        ]))
+        .unwrap();
+        config.repositories = vec!["repo.test".into()];
+        config.ignored_repositories = config.repositories.clone();
+        config.limit_scraping_to_repositories = only;
+        assert_eq!(ConfigManager::try_from_config(config).is_ok(), accepted);
+    }
 
     #[parameterized(
         omitted = { None, 600 },
@@ -237,11 +387,7 @@ mod tests {
                 repo_url: "https://example.com".to_string(),
                 repo_url_text: "example.com".to_string(),
             },
-            servers: vec![Server {
-                hostname: Hostname::try_from("example.com".to_string()).unwrap(),
-                backend_type: ServerBackendType::CVMFS,
-                server_type: ServerType::Stratum1,
-            }],
+            servers: vec![serde_json::from_value(serde_json::json!({"hostname":"example.com", "backend_type":"CVMFS", "server_type":"Stratum1"})).unwrap()],
             repositories: vec![],
             ignored_repositories: vec![],
             rules: serde_json::from_str::<ConfigFile>(include_str!("../../../config.json"))
@@ -267,11 +413,7 @@ mod tests {
                 repo_url: "https://example.com".to_string(),
                 repo_url_text: "example.com".to_string(),
             },
-            servers: vec![Server {
-                hostname: Hostname::try_from("example.com".to_string()).unwrap(),
-                backend_type: ServerBackendType::S3,
-                server_type: ServerType::Stratum1,
-            }],
+            servers: vec![serde_json::from_value(serde_json::json!({"hostname":"example.com", "backend_type":"S3", "server_type":"Stratum1"})).unwrap()],
             repositories: vec![],
             ignored_repositories: vec![],
             rules: serde_json::from_str::<ConfigFile>(include_str!("../../../config.json"))

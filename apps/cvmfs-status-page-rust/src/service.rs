@@ -115,8 +115,8 @@ impl ServiceArgs {
             "interval must be between 1 and 86400 seconds"
         );
         anyhow::ensure!(
-            (1..=86400).contains(&settings.collection_deadline_seconds),
-            "collection deadline must be between 1 and 86400 seconds"
+            (1..=3600).contains(&settings.collection_deadline_seconds),
+            "collection deadline must be between 1 and 3600 seconds"
         );
         anyhow::ensure!(
             (1..=3600).contains(&settings.shutdown_grace_seconds),

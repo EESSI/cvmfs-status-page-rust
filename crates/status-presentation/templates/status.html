@@ -72,7 +72,7 @@
 
                         {% for server in data.stratum1.servers|sort(attribute="name") %}
                         <tr>
-                            <td class="main">{{ server.name }}
+                            <td class="main">{{ server.name }}{% if server.failed_repositories %}{% for failure in server.failed_repositories %}<div class="muted">{{ failure.name }}: Unavailable</div>{% endfor %}{% endif %}
                                 {% if server.replication_details %}
                                 {% for detail in server.replication_details %}
                                 <div class="muted">{{ detail }}</div>
@@ -109,7 +109,7 @@
 
                         {% for server in data.syncservers.servers|sort(attribute="name") %}
                         <tr>
-                            <td class="main">{{ server.name }}</td>
+                            <td class="main">{{ server.name }}{% if server.failed_repositories %}{% for failure in server.failed_repositories %}<div class="muted">{{ failure.name }}: Unavailable</div>{% endfor %}{% endif %}</td>
                             <td class="updates"><span class="{{ server.update_class }}"></span></td>
                             <td class="geoapi"><span class="{{ server.geoapi_class }}" title="{{ server.geoapi_description }}" aria-label="{{ server.geoapi_description }}"></span></td>
                         </tr>
