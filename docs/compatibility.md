@@ -131,7 +131,12 @@ changes. Review configuration and upstream responses before upgrading:
   base path, query or fragment. Use exactly one address field. Endpoints support
   DNS names and IPv4; IPv6 cannot yet be represented in this application's
   history/public identity. Hostnames are canonicalized to lowercase and must be
-  unique even across different schemes, ports or server types.
+  unique even across different schemes, ports or server types. Legacy hostnames
+  now follow ASCII DNS limits (253 bytes total, 63 per label); use IDNA/punycode
+  for international names or an endpoint that normalizes them. Update consumers
+  that key on the old spelling. Existing history under a mixed-case or Unicode
+  spelling stays under that old identity; new observations use the canonical
+  name and start a separate history series.
 - Repository names must be 1–255 ASCII letters, digits, dots, underscores or
   hyphens, without empty dot-separated components. Configured names, including
   ignored names, are checked at startup; at most 10000 configured names are

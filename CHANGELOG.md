@@ -41,7 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking for scraper configurations/upstreams:** redirects are disabled and
   AutoDetect assumes S3 only on index HTTP 404. Use the final origin via the new
   HTTP(S) `endpoint` field when needed; legacy `hostname` configuration and output
-  remain supported. Duplicate host identities, invalid repository names and empty
+  remain supported. Hostnames now use lowercase ASCII DNS/IPv4 identities; use
+  IDNA/punycode for international names and update consumers keyed on old spellings.
+  Existing history with another spelling remains a separate series. Duplicate
+  host identities, invalid repository names and empty
   effective S3 selections are rejected. Response-size caps, request timeouts,
   stricter manifests and GeoAPI validation can reject formerly accepted responses.
   Review the [migration limits](docs/compatibility.md#configuration-and-upstream-validation).
