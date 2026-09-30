@@ -43,6 +43,12 @@ SCENARIOS = (
 )
 
 
+class FixtureServer(ThreadingHTTPServer):
+    # All upstream hosts share this listener. Accommodate the scraper's concurrent
+    # connection burst without the default backlog of five causing TCP retries.
+    request_queue_size = 128
+
+
 class FixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
@@ -203,7 +209,7 @@ class HtmlOutputComparison(unittest.TestCase):
                 root = Path(tmp)
                 config = root / "config.json"
                 config.write_text(json.dumps(self.configuration(scenario)))
-                with ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler) as server:
+                with FixtureServer(("127.0.0.1", 0), FixtureHandler) as server:
                     server.scenario = scenario
                     server.unexpected = []
                     thread = threading.Thread(target=server.serve_forever, daemon=True)

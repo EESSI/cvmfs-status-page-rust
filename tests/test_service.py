@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from html import unescape
-from http.server import ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
@@ -21,7 +20,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from live_scrape_compare import normalize_json, normalize_metrics
 import test_html_output as html_fixture
-from test_html_output import FixtureHandler, SCENARIOS
+from test_html_output import FixtureHandler, FixtureServer, SCENARIOS
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/fixtures/compatibility"
@@ -64,7 +63,7 @@ def upstream(scenario, delay=0, response=None):
                 super().do_GET()
             except (BrokenPipeError, ConnectionResetError):
                 pass
-    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+    with FixtureServer(("127.0.0.1", 0), Handler) as server:
         server.scenario = scenario
         server.unexpected = []
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -288,31 +287,40 @@ class ServiceAcceptance(unittest.TestCase):
 
     def test_optional_probe_deadline_keeps_repositories_and_recovers(self):
         scenario = SCENARIOS[0]
-        blocked = threading.Event()
-        blocked.set()
+        release_probes = threading.Event()
+        contact_requested = threading.Event()
+        geoapi_requested = threading.Event()
 
         def respond(host, path, result):
-            if blocked.is_set() and (path.endswith("/meta.json") or "/api/v1.0/geo/" in path):
-                time.sleep(2)
+            if path.endswith("/meta.json") or "/api/v1.0/geo/" in path:
+                if host == "alpha.s1.test":
+                    (contact_requested if path.endswith("/meta.json") else geoapi_requested).set()
+                # Hold only optional probes until the timed-out generation is
+                # inspected. Always release them during cleanup, even on failure.
+                release_probes.wait()
             return result
 
         with tempfile.TemporaryDirectory() as tmp, upstream(scenario, response=respond) as env:
             root = Path(tmp)
             config_file(root, scenario)
-            with RunningService(root, scenario, env, interval=3, deadline=1) as service:
-                service.wait()
-                status = json.loads(request(service.public, "status.json")[2])
-                self.assertTrue(all(s["status"] == "OK" for s in status["servers"]))
-                server = next(s for s in status["servers"] if s["name"] == "alpha.s1.test")
-                self.assertEqual(server["geoapi_status"], "unavailable")
-                self.assertIsNone(server["metadata"]["administrator"])
-                first_publication = service.wait()["runtime"]["last_publication"]
-                blocked.clear()
-                service.wait(lambda d: d["runtime"]["last_publication"] > first_publication)
-                status = json.loads(request(service.public, "status.json")[2])
-                server = next(s for s in status["servers"] if s["name"] == "alpha.s1.test")
-                self.assertEqual(server["geoapi_status"], "available")
-                self.assertEqual(server["metadata"]["administrator"], "Fixture admin")
+            try:
+                with RunningService(root, scenario, env, interval=3, deadline=1) as service:
+                    first_publication = service.wait()["runtime"]["last_publication"]
+                    status = json.loads(request(service.public, "status.json")[2])
+                    self.assertTrue(all(s["status"] == "OK" for s in status["servers"]), status["servers"])
+                    self.assertTrue(contact_requested.is_set())
+                    self.assertTrue(geoapi_requested.is_set())
+                    server = next(s for s in status["servers"] if s["name"] == "alpha.s1.test")
+                    self.assertEqual(server["geoapi_status"], "unavailable")
+                    self.assertIsNone(server["metadata"]["administrator"])
+                    release_probes.set()
+                    service.wait(lambda d: d["runtime"]["last_publication"] > first_publication)
+                    status = json.loads(request(service.public, "status.json")[2])
+                    server = next(s for s in status["servers"] if s["name"] == "alpha.s1.test")
+                    self.assertEqual(server["geoapi_status"], "available")
+                    self.assertEqual(server["metadata"]["administrator"], "Fixture admin")
+            finally:
+                release_probes.set()
 
     def test_unsigned_manifest_values_and_missing_times_persist(self):
         scenario = replace(SCENARIOS[0], history=True)
