@@ -110,19 +110,14 @@ impl Status {
         repo: &PopulatedRepositoryOrReplica,
         scraped_servers: &[ScrapedServer],
     ) -> Self {
-        let good_servers: Vec<&PopulatedServer> = scraped_servers
-            .iter()
-            .filter_map(ScrapedServer::as_populated_server)
-            .collect();
-
-        let stratum0 = good_servers.iter().find(|s| {
-            s.server_type == ServerType::Stratum0
-                && s.repositories.iter().any(|r| r.name == repo.name)
-        });
-
-        if let Some(stratum0) = stratum0 {
+        let references = stratum0_references(scraped_servers);
+        if let Some(stratum0) = references.get(repo.name.as_str()) {
             compare_with_stratum0(repo, stratum0)
         } else {
+            let good_servers = scraped_servers
+                .iter()
+                .filter_map(ScrapedServer::as_populated_server)
+                .collect::<Vec<_>>();
             compare_with_other_stratum1s(repo, &good_servers)
         }
     }
@@ -345,12 +340,9 @@ impl StatusManager {
         scraped_servers: &[ScrapedServer],
         mut replication: Option<&mut ReplicationTracker>,
     ) -> Self {
-        let stratum0 = scraped_servers
-            .iter()
-            .filter_map(ScrapedServer::as_populated_server)
-            .find(|server| server.server_type == ServerType::Stratum0);
-        if let (Some(tracker), Some(stratum0)) = (replication.as_deref_mut(), stratum0) {
-            for repo in &stratum0.repositories {
+        let references = stratum0_references(scraped_servers);
+        if let Some(tracker) = replication.as_deref_mut() {
+            for repo in references.values() {
                 tracker.observe_stratum0(&repo.name, repo.revision());
             }
         }
@@ -364,9 +356,7 @@ impl StatusManager {
                         .map(|repo| {
                             let replication_grace = if server.server_type == ServerType::Stratum1 {
                                 replication.as_deref().and_then(|tracker| {
-                                    let reference = stratum0.and_then(|s0| {
-                                        s0.repositories.iter().find(|r| r.name == repo.name)
-                                    });
+                                    let reference = references.get(repo.name.as_str());
                                     tracker.grace_for(
                                         &repo.name,
                                         repo.revision(),
@@ -796,16 +786,28 @@ fn compare_with_other_stratum1s(
     }
 }
 
+fn stratum0_references(
+    scraped_servers: &[ScrapedServer],
+) -> HashMap<&str, &PopulatedRepositoryOrReplica> {
+    let mut references = HashMap::new();
+    for repo in scraped_servers
+        .iter()
+        .filter_map(ScrapedServer::as_populated_server)
+        .filter(|server| server.server_type == ServerType::Stratum0)
+        .flat_map(|server| &server.repositories)
+    {
+        // Keep the first successful observation of each repository, even when
+        // an earlier Stratum0 failed to collect that repository.
+        references.entry(repo.name.as_str()).or_insert(repo);
+    }
+    references
+}
+
 fn compare_with_stratum0(
     repo: &PopulatedRepositoryOrReplica,
-    stratum0: &PopulatedServer,
+    stratum0: &PopulatedRepositoryOrReplica,
 ) -> Status {
-    let divergence = stratum0
-        .repositories
-        .iter()
-        .find(|r| r.name == repo.name)
-        .map(|stratum0_repo| repo.revision().abs_diff(stratum0_repo.revision()))
-        .unwrap_or(0);
+    let divergence = repo.revision().abs_diff(stratum0.revision());
 
     match divergence {
         0 => Status::OK,

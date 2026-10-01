@@ -47,8 +47,9 @@ fn generate_status_page_data(
 }
 
 use status_domain::observations::{
-    Manifest, PopulatedRepositoryOrReplica, ServerBackendType, ServerIdentity,
+    Manifest, PopulatedRepositoryOrReplica, RepositoryFailure, ServerBackendType, ServerIdentity,
 };
+use status_domain::replication::{ReplicationState, ReplicationTracker};
 use std::fs;
 use yare::parameterized;
 
@@ -76,21 +77,142 @@ fn populated_with_backend(
     ScrapedServer::populated(
         ServerIdentity::new(hostname.parse().unwrap(), server_type, backend),
         backend,
-        revisions
-            .iter()
-            .map(|(name, revision)| {
-                PopulatedRepositoryOrReplica::new(
-                    name.to_string(),
-                    Manifest::new(*revision, Some(500), 1, 60).unwrap(),
-                )
-                .unwrap()
-            })
-            .collect(),
+        repository_observations(revisions),
         Vec::new(),
         serde_json::json!({}),
         geoapi,
     )
     .unwrap()
+}
+
+fn repository_observations(revisions: &[(&str, u64)]) -> Vec<PopulatedRepositoryOrReplica> {
+    revisions
+        .iter()
+        .map(|(name, revision)| {
+            PopulatedRepositoryOrReplica::new(
+                name.to_string(),
+                Manifest::new(*revision, Some(500), 1, 60).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect()
+}
+
+fn stratum0_with_failures(revisions: &[(&str, u64)]) -> ScrapedServer {
+    ScrapedServer::populated(
+        ServerIdentity::new(
+            "s0.example.org".parse().unwrap(),
+            ServerType::Stratum0,
+            ServerBackendType::CVMFS,
+        ),
+        ServerBackendType::CVMFS,
+        repository_observations(revisions),
+        vec![RepositoryFailure::new("repo".into(), "unavailable".into()).unwrap()],
+        serde_json::json!({}),
+        false,
+    )
+    .unwrap()
+}
+
+#[test]
+fn partial_stratum0_uses_the_first_successful_reference_per_repository_for_grace() {
+    let scraped = vec![
+        stratum0_with_failures(&[("other-repo", 22)]),
+        populated_server(
+            "s0-other.example.org",
+            ServerType::Stratum0,
+            &[("repo", 12), ("other-repo", 24)],
+        ),
+        populated_server(
+            "s1.example.org",
+            ServerType::Stratum1,
+            &[("repo", 10), ("other-repo", 20)],
+        ),
+    ];
+    let mut tracker = ReplicationTracker::new(ReplicationState::empty(), 600, 1000);
+    let manager = status_manager(&scraped, Some(&mut tracker));
+    assert_eq!(manager.servers[2].status, Status::OK);
+    for repo in &manager.servers[2].repositories {
+        let grace = repo.replication_grace.as_ref().unwrap();
+        assert_eq!(grace.revisions_behind, 2);
+        assert_eq!(grace.remaining_seconds, 600);
+        assert_eq!(grace.first_observed_at, 1000);
+    }
+    let observations = tracker.state().observations();
+    assert_eq!(observations["repo"].revisions(), &[(12, 1000)].into());
+    assert_eq!(observations["other-repo"].revisions(), &[(22, 1000)].into());
+
+    let mut tracker = ReplicationTracker::new(tracker.state().clone(), 600, 1600);
+    let manager = status_manager(&scraped, Some(&mut tracker));
+    assert_eq!(manager.servers[2].status, Status::FAILED);
+    assert!(manager.servers[2]
+        .repositories
+        .iter()
+        .all(|repo| repo.replication_grace.is_none()));
+}
+
+#[parameterized(caught_up = { false }, unavailable = { true })]
+fn partial_stratum0_records_the_later_reference_without_a_lagging_replica(unavailable: bool) {
+    let mut scraped = vec![
+        stratum0_with_failures(&[]),
+        populated_server(
+            "s0-other.example.org",
+            ServerType::Stratum0,
+            &[("repo", 12)],
+        ),
+        if unavailable {
+            failed_server("s1.example.org", ServerType::Stratum1)
+        } else {
+            populated_server("s1.example.org", ServerType::Stratum1, &[("repo", 12)])
+        },
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    status_manager_with_replication(&scraped, dir.path(), 600, 1000);
+    scraped[0] = populated_server("s0.example.org", ServerType::Stratum0, &[("repo", 12)]);
+    scraped[2] = populated_server("s1.example.org", ServerType::Stratum1, &[("repo", 10)]);
+    let manager = status_manager_with_replication(&scraped, dir.path(), 600, 1600);
+    assert_eq!(manager.servers[2].status, Status::FAILED);
+    assert!(manager.servers[2].repositories[0]
+        .replication_grace
+        .is_none());
+}
+
+#[parameterized(
+    partial = { stratum0_with_failures(&[("good-repo", 42)]), vec!["good-repo:42", "s0.example.org: repo: Unavailable"] },
+    all_repositories_failed = { stratum0_with_failures(&[]), vec!["s0.example.org: repo: Unavailable"] },
+    unreachable = { failed_server("s0.example.org", ServerType::Stratum0), vec!["Stratum0 servers are not reachable!"] },
+    empty = { populated_server("s0.example.org", ServerType::Stratum0, &[]), vec!["Stratum0 servers are not reachable!"] }
+)]
+fn stratum0_failure_details_are_visible_in_html(scraped: ScrapedServer, expected: Vec<&str>) {
+    let manager = status_manager(&[scraped], None);
+    let config_manager = config::ConfigManager::try_from_config(
+        serde_json::from_str(include_str!("../../../config.json")).unwrap(),
+    )
+    .unwrap();
+    let data = generate_status_page_data(&config_manager, &manager).unwrap();
+    assert_eq!(data.stratum0.status, Status::FAILED);
+    assert_eq!(data.stratum0.details, expected);
+    let mut context = tera::Context::new();
+    context.insert("data", &data);
+    let html = templating::render_template(
+        Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../crates/status-presentation/templates"
+        )),
+        "status.html",
+        &context,
+    )
+    .unwrap();
+    let panel = html
+        .split_once("<div id=\"stratum0\"")
+        .unwrap()
+        .1
+        .split_once("</div>")
+        .unwrap()
+        .0;
+    for detail in expected {
+        assert!(panel.contains(detail), "missing Stratum0 detail: {detail}");
+    }
 }
 
 #[parameterized(

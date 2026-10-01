@@ -86,6 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use the first successful Stratum0 observation for each repository when tracking
+  replication grace, including when an earlier Stratum0 has a collection failure.
+- Keep collected Stratum0 revisions and named repository failures visible in the
+  status panel when Stratum0 health is failed.
 - Preserve complete history samples appended after an interrupted JSONL write.
 - Unknown public URLs display a styled 404 page instead of a blank page, with
   a customizable `templates/404.html` override and a link back to the status page.

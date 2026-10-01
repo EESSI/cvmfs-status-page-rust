@@ -487,7 +487,14 @@ fn create_stratum_status(
     StratumStatus {
         status,
         status_class: status.class().to_string(),
-        details: if status == Status::FAILED && server_type == ServerType::Stratum0 {
+        details: if status == Status::FAILED
+            && server_type == ServerType::Stratum0
+            && status_manager
+                .get_by_type(ServerType::Stratum0)
+                .iter()
+                .all(|server| {
+                    server.repositories.is_empty() && server.failed_repositories.is_empty()
+                }) {
             vec!["Stratum0 servers are not reachable!".to_string()]
         } else {
             status_manager.details_stratum0()
