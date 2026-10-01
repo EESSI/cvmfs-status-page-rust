@@ -32,6 +32,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrate to crates.io `cvmfs_server_scraper` 0.1.0 with a reusable client and
+  bounded collection (eight servers, four repository jobs per server, 32 requests
+  globally). Preserve completed repositories on partial failures and deadlines;
+  failed names appear in HTML, JSON, metrics and outage history. Optional contact
+  and GeoAPI failures preserve repository health. `lazy_static` is no longer in
+  the dependency graph; existing lazy initialization uses `once_cell`.
+- **Breaking for scraper configurations/upstreams:** redirects are disabled and
+  AutoDetect assumes S3 only on index HTTP 404. Use the final origin via the new
+  HTTP(S) `endpoint` field when needed; legacy `hostname` configuration and output
+  remain supported. Hostnames now use lowercase ASCII DNS/IPv4 identities; use
+  IDNA/punycode for international names and update consumers keyed on old spellings.
+  Existing history with another spelling remains a separate series. Duplicate
+  host identities, invalid repository names and empty
+  effective S3 selections are rejected. Response-size caps, request timeouts,
+  stricter manifests and GeoAPI validation can reject formerly accepted responses.
+  Review the [migration limits](docs/compatibility.md#configuration-and-upstream-validation).
+- **Breaking for consumers of publication times:** absent manifest timestamps now
+  appear as `null` in enriched JSON/raw history and have no timestamp metric or
+  computed lag. Accept nullable times and optional `failed_repositories` arrays
+  in custom consumers/templates. Revisions/catalogue sizes now retain `u64` and
+  TTLs `u32`; preserve a complete state backup for rollback to older binaries.
+- **Breaking for service deadline settings on unreleased main:** collection
+  deadlines accept 1–3600 seconds instead of 1–86400; reduce larger values before
+  upgrading. Server deadlines start on admission, so more than eight servers may
+  require multiple batches; allow enough time between cron runs.
 - Converted to an unpublished Rust workspace with libraries under `crates/` and
   both binaries under `apps/cvmfs-status-page-rust`. Source templates and assets
   now live under `crates/status-presentation/`; destination customization and
@@ -39,9 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking for overlapping jobs:** both binaries acquire exclusive state/history
   writer locks; a competing run exits with an error. Stop old writers before
   upgrading, deploy one writer and retain state backups for rollback.
-- The static generator now limits each server collection and external metrics
-  fetch to 120 seconds. Timed-out servers become failed observations; only the
-  service exposes a configurable collection deadline.
+- The static generator now limits each admitted server collection and external
+  metrics fetch to 120 seconds. Unfinished repositories become failed observations;
+  only the service exposes a configurable collection deadline.
 - **Breaking for some existing paths/templates:** both binaries require canonical
   relative output names and reject reserved/conflicting paths. Use `index.html`
   instead of `./index.html`; replace symlinked entries in the generator's template
@@ -49,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking for out-of-range configurations:** both binaries validate history
   retention/window and Grafana timeout/range limits at startup. Adjust values to
   the [documented limits](docs/compatibility.md#configuration-and-upstream-validation).
-  Invalid upstream repository observations now make the affected server unavailable.
+  Invalid upstream repository observations now fail the affected repository and
+  server while retaining successful observations.
 - Static generation now requires durable generation commits in the destination
   before public export, even with history and grace disabled. Allow space for
   `generations/`, commit manifests and writer locks on writable local storage.
@@ -60,6 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use the first successful Stratum0 observation for each repository when tracking
+  replication grace, including when an earlier Stratum0 has a collection failure.
+- Keep collected Stratum0 revisions and named repository failures visible in the
+  status panel when Stratum0 health is failed.
 - Preserve complete history samples appended after an interrupted JSONL write.
 - Unknown public URLs display a styled 404 page instead of a blank page, with
   a customizable `templates/404.html` override and a link back to the status page.

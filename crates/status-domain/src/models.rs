@@ -8,8 +8,8 @@ use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter};
 
 use crate::observations::{
-    Hostname, Manifest, PopulatedRepositoryOrReplica, PopulatedServer, ScrapedServer,
-    ServerBackendType, ServerMetadata, ServerType,
+    Hostname, Manifest, PopulatedRepositoryOrReplica, PopulatedServer, RepositoryFailure,
+    ScrapedServer, ServerBackendType, ServerMetadata, ServerType,
 };
 
 use crate::replication::{ReplicationGrace, ReplicationTracker};
@@ -110,18 +110,14 @@ impl Status {
         repo: &PopulatedRepositoryOrReplica,
         scraped_servers: &[ScrapedServer],
     ) -> Self {
-        let good_servers: Vec<&PopulatedServer> = scraped_servers
-            .iter()
-            .filter_map(ScrapedServer::as_populated_server)
-            .collect();
-
-        let stratum0 = good_servers
-            .iter()
-            .find(|s| s.server_type == ServerType::Stratum0);
-
-        if let Some(stratum0) = stratum0 {
+        let references = stratum0_references(scraped_servers);
+        if let Some(stratum0) = references.get(repo.name.as_str()) {
             compare_with_stratum0(repo, stratum0)
         } else {
+            let good_servers = scraped_servers
+                .iter()
+                .filter_map(ScrapedServer::as_populated_server)
+                .collect::<Vec<_>>();
             compare_with_other_stratum1s(repo, &good_servers)
         }
     }
@@ -149,15 +145,15 @@ pub struct RepositoryEnriched {
     pub name: String,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stratum0_revision: Option<i32>,
+    pub stratum0_revision: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stratum0_timestamp: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stratum1_min_revision: Option<i32>,
+    pub stratum1_min_revision: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stratum1_max_revision: Option<i32>,
+    pub stratum1_max_revision: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub divergence: Option<i32>,
+    pub divergence: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync_lag_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -178,6 +174,8 @@ pub struct ServerEnriched {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub incidents_90d: Vec<Incident>,
     pub repositories: Vec<ServerRepositoryEnriched>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub failed_repositories: Vec<RepositoryFailure>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -217,8 +215,8 @@ pub struct Incident {
 #[derive(Debug, Serialize, Clone)]
 pub struct ServerRepositoryEnriched {
     pub name: String,
-    pub revision: i32,
-    pub timestamp: i64,
+    pub revision: u64,
+    pub timestamp: Option<i64>,
     pub catalogue_size_bytes: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replication_grace: Option<ReplicationGrace>,
@@ -236,7 +234,7 @@ pub struct HistoryBar {
 #[derive(Debug, Serialize, Clone)]
 pub struct RevisionPoint {
     pub t: i64,
-    pub r: i32,
+    pub r: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -248,7 +246,7 @@ pub struct DiskUsagePoint {
 #[derive(Debug, Serialize, Clone)]
 pub struct Repositories {
     pub name: String,
-    pub revision: i32,
+    pub revision: u64,
     pub manifest: Manifest,
     pub status: Status,
     /// Is the revision in sync with either the stratum0 or the stratum1s?
@@ -264,6 +262,8 @@ pub struct Server {
     pub backend_detected: Option<ServerBackendType>,
     pub hostname: Hostname,
     pub repositories: Vec<Repositories>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub failed_repositories: Vec<RepositoryFailure>,
     pub status: Status,
     pub metadata: Option<ServerMetadata>,
     pub geoapi_status: GeoapiStatus,
@@ -340,12 +340,9 @@ impl StatusManager {
         scraped_servers: &[ScrapedServer],
         mut replication: Option<&mut ReplicationTracker>,
     ) -> Self {
-        let stratum0 = scraped_servers
-            .iter()
-            .filter_map(ScrapedServer::as_populated_server)
-            .find(|server| server.server_type == ServerType::Stratum0);
-        if let (Some(tracker), Some(stratum0)) = (replication.as_deref_mut(), stratum0) {
-            for repo in &stratum0.repositories {
+        let references = stratum0_references(scraped_servers);
+        if let Some(tracker) = replication.as_deref_mut() {
+            for repo in references.values() {
                 tracker.observe_stratum0(&repo.name, repo.revision());
             }
         }
@@ -359,9 +356,7 @@ impl StatusManager {
                         .map(|repo| {
                             let replication_grace = if server.server_type == ServerType::Stratum1 {
                                 replication.as_deref().and_then(|tracker| {
-                                    let reference = stratum0.and_then(|s0| {
-                                        s0.repositories.iter().find(|r| r.name == repo.name)
-                                    });
+                                    let reference = references.get(repo.name.as_str());
                                     tracker.grace_for(
                                         &repo.name,
                                         repo.revision(),
@@ -387,11 +382,15 @@ impl StatusManager {
                         })
                         .collect();
 
-                    let overall_status = repositories
-                        .iter()
-                        .map(|repo| repo.status)
-                        .max()
-                        .unwrap_or(Status::FAILED);
+                    let overall_status = if !server.failed_repositories.is_empty() {
+                        Status::FAILED
+                    } else {
+                        repositories
+                            .iter()
+                            .map(|repo| repo.status)
+                            .max()
+                            .unwrap_or(Status::FAILED)
+                    };
 
                     Server {
                         server_type: server.server_type,
@@ -399,6 +398,7 @@ impl StatusManager {
                         backend_detected: Some(server.backend_detected),
                         hostname: server.hostname.clone(),
                         repositories,
+                        failed_repositories: server.failed_repositories.clone(),
                         status: overall_status,
                         metadata: Some(server.metadata.clone()),
                         geoapi_status: GeoapiStatus::from(scraped),
@@ -410,6 +410,7 @@ impl StatusManager {
                     backend_detected: None,
                     hostname: server.hostname.clone(),
                     repositories: Vec::new(),
+                    failed_repositories: Vec::new(),
                     status: Status::FAILED,
                     metadata: None,
                     geoapi_status: GeoapiStatus::from(scraped),
@@ -448,7 +449,7 @@ impl StatusManager {
             .iter()
             .flat_map(|s| s.repositories.iter())
             .map(|r| r.manifest.b)
-            .sum();
+            .fold(0, u64::saturating_add);
 
         StatusSummary {
             stratum0_count: self.get_by_type(ServerType::Stratum0).len(),
@@ -488,7 +489,7 @@ impl StatusManager {
                     .iter()
                     .filter(|s| s.server_type == ServerType::Stratum1)
                     .flat_map(|s| s.repositories.iter().filter(|r| r.name == name))
-                    .map(|r| r.manifest.t)
+                    .filter_map(|r| r.manifest.t)
                     .collect::<Vec<_>>();
                 let stratum1_min_revision = stratum1_revisions.iter().min().copied();
                 let stratum1_max_revision = stratum1_revisions.iter().max().copied();
@@ -496,12 +497,15 @@ impl StatusManager {
                     (Some(min), Some(max)) => Some(max - min),
                     _ => None,
                 };
-                let sync_lag_seconds = stratum0_repo.and_then(|s0| {
-                    stratum1_timestamps
-                        .iter()
-                        .min()
-                        .map(|min_ts| (s0.manifest.t - min_ts).max(0))
-                });
+                let sync_lag_seconds =
+                    stratum0_repo
+                        .and_then(|s0| s0.manifest.t)
+                        .and_then(|s0_time| {
+                            stratum1_timestamps
+                                .iter()
+                                .min()
+                                .map(|min_ts| (s0_time - min_ts).max(0))
+                        });
                 let catalogue_size_bytes = stratum0_repo.map(|r| r.manifest.b).or_else(|| {
                     self.servers
                         .iter()
@@ -514,7 +518,7 @@ impl StatusManager {
                     name: name.clone(),
                     status: *repo_status.get(&name).unwrap_or(&Status::OK),
                     stratum0_revision: stratum0_repo.map(|r| r.revision),
-                    stratum0_timestamp: stratum0_repo.map(|r| r.manifest.t),
+                    stratum0_timestamp: stratum0_repo.and_then(|r| r.manifest.t),
                     stratum1_min_revision,
                     stratum1_max_revision,
                     divergence,
@@ -530,6 +534,7 @@ impl StatusManager {
         self.servers
             .iter()
             .map(|server| ServerEnriched {
+                failed_repositories: server.failed_repositories.clone(),
                 hostname: server.hostname.to_string(),
                 server_type: server.server_type.to_label().to_string(),
                 status: server.status,
@@ -563,7 +568,7 @@ impl StatusManager {
                         .repositories
                         .iter()
                         .find(|r| r.name == repo.name)
-                        .map(|s0_repo| (s0_repo.manifest.t - repo.manifest.t).max(0))
+                        .and_then(|s0_repo| Some((s0_repo.manifest.t? - repo.manifest.t?).max(0)))
                 })
             })
             .max()
@@ -633,9 +638,12 @@ impl StatusManager {
     }
 
     pub fn details_stratum0(&self) -> Vec<String> {
-        let stratum0s = self.get_by_type_ok(ServerType::Stratum0);
+        let stratum0s = self.get_by_type(ServerType::Stratum0);
 
-        if stratum0s.is_empty() {
+        if stratum0s
+            .iter()
+            .all(|s| s.repositories.is_empty() && s.failed_repositories.is_empty())
+        {
             return vec!["No stratum0 servers scraped!".to_string()];
         }
 
@@ -646,6 +654,9 @@ impl StatusManager {
                     .repositories
                     .iter()
                     .map(|repo| format!("{}:{}", repo.name, repo.revision))
+                    .chain(stratum0.failed_repositories.iter().map(|failure| {
+                        format!("{}: {}: Unavailable", stratum0.hostname, failure.name())
+                    }))
             })
             .collect()
     }
@@ -672,6 +683,9 @@ impl StatusManager {
         let mut repo_status: HashMap<String, Status> = HashMap::new();
 
         for server in &self.servers {
+            for failure in &server.failed_repositories {
+                repo_status.insert(failure.name().to_owned(), Status::FAILED);
+            }
             for repo in &server.repositories {
                 let status = repo_status.get(&repo.name).unwrap_or(&Status::OK);
                 let new_status = status.max(&repo.status);
@@ -760,7 +774,7 @@ fn compare_with_other_stratum1s(
                 .repositories
                 .iter()
                 .find(|r| r.name == repo.name)
-                .map(|stratum1_repo| (repo.revision() - stratum1_repo.revision()).abs())
+                .map(|stratum1_repo| repo.revision().abs_diff(stratum1_repo.revision()))
         })
         .max()
         .unwrap_or(0);
@@ -772,16 +786,28 @@ fn compare_with_other_stratum1s(
     }
 }
 
+fn stratum0_references(
+    scraped_servers: &[ScrapedServer],
+) -> HashMap<&str, &PopulatedRepositoryOrReplica> {
+    let mut references = HashMap::new();
+    for repo in scraped_servers
+        .iter()
+        .filter_map(ScrapedServer::as_populated_server)
+        .filter(|server| server.server_type == ServerType::Stratum0)
+        .flat_map(|server| &server.repositories)
+    {
+        // Keep the first successful observation of each repository, even when
+        // an earlier Stratum0 failed to collect that repository.
+        references.entry(repo.name.as_str()).or_insert(repo);
+    }
+    references
+}
+
 fn compare_with_stratum0(
     repo: &PopulatedRepositoryOrReplica,
-    stratum0: &PopulatedServer,
+    stratum0: &PopulatedRepositoryOrReplica,
 ) -> Status {
-    let divergence = stratum0
-        .repositories
-        .iter()
-        .find(|r| r.name == repo.name)
-        .map(|stratum0_repo| (repo.revision() - stratum0_repo.revision()).abs())
-        .unwrap_or(0);
+    let divergence = repo.revision().abs_diff(stratum0.revision());
 
     match divergence {
         0 => Status::OK,
@@ -819,6 +845,52 @@ mod tests {
 
     use crate::observations::Hostname;
 
+    #[test]
+    fn missing_stratum0_repository_uses_peer_revisions_without_signed_overflow() {
+        use crate::observations::ServerIdentity;
+        let repo = |revision| {
+            PopulatedRepositoryOrReplica::new(
+                "repo.test".into(),
+                Manifest::new(revision, None, 1, 60).unwrap(),
+            )
+            .unwrap()
+        };
+        let server = |host: &str, kind, repos, failures| {
+            ScrapedServer::populated(
+                ServerIdentity::new(host.parse().unwrap(), kind, ServerBackendType::CVMFS),
+                ServerBackendType::CVMFS,
+                repos,
+                failures,
+                serde_json::json!({}),
+                false,
+            )
+            .unwrap()
+        };
+        let servers = vec![
+            server(
+                "s0.test",
+                ServerType::Stratum0,
+                vec![],
+                vec![RepositoryFailure::new("repo.test".into(), "unavailable".into()).unwrap()],
+            ),
+            server(
+                "s1.test",
+                ServerType::Stratum1,
+                vec![repo(u64::MAX)],
+                vec![],
+            ),
+            server("s2.test", ServerType::Stratum1, vec![repo(0)], vec![]),
+        ];
+        assert_eq!(
+            Status::get_repo_revision_status(&repo(u64::MAX), &servers),
+            Status::FAILED
+        );
+        assert_eq!(
+            Status::get_repo_revision_status(&repo(0), &servers),
+            Status::FAILED
+        );
+    }
+
     fn create_status_manager() -> StatusManager {
         let servers = vec![
             Server {
@@ -827,6 +899,7 @@ mod tests {
                 backend_detected: Some(ServerBackendType::CVMFS),
                 hostname: Hostname::from_str("stratum0.example.com").unwrap(),
                 repositories: vec![],
+                failed_repositories: Vec::new(),
                 status: Status::OK,
                 metadata: None,
                 geoapi_status: GeoapiStatus::Unavailable,
@@ -837,6 +910,7 @@ mod tests {
                 backend_detected: Some(ServerBackendType::CVMFS),
                 hostname: Hostname::from_str("stratum0-maintenance.example.com").unwrap(),
                 repositories: vec![],
+                failed_repositories: Vec::new(),
                 status: Status::MAINTENANCE,
                 metadata: None,
                 geoapi_status: GeoapiStatus::Unavailable,
@@ -847,6 +921,7 @@ mod tests {
                 backend_detected: Some(ServerBackendType::CVMFS),
                 hostname: Hostname::from_str("stratum1-auto-cvmfs-degraded.example.com").unwrap(),
                 repositories: vec![],
+                failed_repositories: Vec::new(),
                 status: Status::DEGRADED,
                 metadata: None,
                 geoapi_status: GeoapiStatus::Unavailable,
@@ -857,6 +932,7 @@ mod tests {
                 backend_detected: Some(ServerBackendType::CVMFS),
                 hostname: Hostname::from_str("stratum1-cvmfs-cvmfs-ok.example.com").unwrap(),
                 repositories: vec![],
+                failed_repositories: Vec::new(),
                 status: Status::OK,
                 metadata: None,
                 geoapi_status: GeoapiStatus::Unavailable,
@@ -867,6 +943,7 @@ mod tests {
                 backend_detected: Some(ServerBackendType::CVMFS),
                 hostname: Hostname::from_str("syncserver.example.com").unwrap(),
                 repositories: vec![],
+                failed_repositories: Vec::new(),
                 status: Status::OK,
                 metadata: None,
                 geoapi_status: GeoapiStatus::Unavailable,

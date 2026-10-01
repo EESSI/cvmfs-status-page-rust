@@ -65,9 +65,10 @@ for those scenarios, not identical behavior for every existing deployment.
 
 - Runs acquire exclusive destination/history writer locks; an overlapping run
   exits with an error. Schedule one writer and stop it before backups or upgrades.
-- Each server collection and the external metrics fetch have a fixed 120-second
-  deadline in the generator. Timed-out servers become failed observations. Only
-  the service exposes a configurable collection deadline.
+- Each admitted server collection and the external metrics fetch have a fixed
+  120-second deadline in the generator. Completed repositories survive timeouts;
+  unfinished repositories become named failures. Only the service exposes a
+  configurable collection deadline (1–3600 seconds).
 - Output names must be canonical relative paths: use `index.html`, not
   `./index.html`. Reserved/conflicting paths and symlinked entries in the
   destination's template tree are rejected. Configuration limits are stricter.
@@ -342,12 +343,19 @@ page falls back to persisted history samples.
   no other way to determine the list of repositories for S3 servers). Due to the
   async scraping of all servers, there is currently no support for falling back
   on repositories detected from other server types (including the Stratum0).
-- `AutoDetect`: Attempts to fetch `cvmfs/info/v1/repositories.json` but does not
-  fail if it is missing. If the scraper fails to fetch the file, the backend
-  will be assumed to be S3.
+- `AutoDetect`: Attempts to fetch `cvmfs/info/v1/repositories.json`. An HTTP 404
+  permits an S3 assumption; other errors and malformed indexes fail discovery.
 
 For servers that are set to or detected as CVMFS, the scraper will scrape the
-union of the detected and configurations explicitly stated repositories.
+union of the detected and configured repositories, applying exclusions, unless
+`limit_scraping_to_repositories` selects only the configured list.
+
+Collection uses crates.io `cvmfs_server_scraper` 0.1.0. Legacy `hostname` entries
+still use HTTP; `endpoint` accepts a final HTTP(S) origin with an optional port.
+Redirects are disabled. Partial repository failures remain visible alongside
+successful observations, and missing publication times remain unknown. Review
+the [validation, transport and output changes](docs/compatibility.md#configuration-and-upstream-validation)
+when upgrading or adapting custom templates.
 
 ## Replication grace period
 

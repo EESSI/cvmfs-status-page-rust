@@ -324,6 +324,19 @@ pub fn generate_prometheus_metrics(
     for server in status_manager.get_all_servers() {
         let ts_ms = Some(ts);
 
+        for failure in &server.failed_repositories {
+            b.add_gauge(
+                "repo_scrape_failed",
+                "Repository collection failed",
+                1.0,
+                &[
+                    ("type", server.server_type.to_label()),
+                    ("server", server.hostname.to_str()),
+                    ("repository", failure.name()),
+                ],
+                ts_ms,
+            );
+        }
         for repo in server.repositories.iter() {
             let repo_labels: [(&str, &str); 3] = [
                 ("type", server.server_type.to_label()),
@@ -354,13 +367,6 @@ pub fn generate_prometheus_metrics(
                 ts_ms,
             )
             .add_gauge(
-                "repo_timestamp",
-                "Repository timestamp",
-                repo.manifest.timestamp() as f64,
-                &repo_labels,
-                ts_ms,
-            )
-            .add_gauge(
                 "repo_ttl",
                 "Repository TTL",
                 repo.manifest.ttl() as f64,
@@ -374,6 +380,15 @@ pub fn generate_prometheus_metrics(
                 &repo_labels,
                 ts_ms,
             );
+            if let Some(timestamp) = repo.manifest.timestamp() {
+                b.add_gauge(
+                    "repo_timestamp",
+                    "Repository timestamp",
+                    timestamp as f64,
+                    &repo_labels,
+                    ts_ms,
+                );
+            }
         }
     }
 
@@ -472,7 +487,14 @@ fn create_stratum_status(
     StratumStatus {
         status,
         status_class: status.class().to_string(),
-        details: if status == Status::FAILED && server_type == ServerType::Stratum0 {
+        details: if status == Status::FAILED
+            && server_type == ServerType::Stratum0
+            && status_manager
+                .get_by_type(ServerType::Stratum0)
+                .iter()
+                .all(|server| {
+                    server.repositories.is_empty() && server.failed_repositories.is_empty()
+                }) {
             vec!["Stratum0 servers are not reachable!".to_string()]
         } else {
             status_manager.details_stratum0()

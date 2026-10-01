@@ -29,12 +29,14 @@ pub struct SnapshotServer {
     pub server_type: String,
     pub s: Status,
     pub repos: BTreeMap<String, SnapshotRepo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failed_repositories: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotRepo {
-    pub r: i32,
-    pub ts: i64,
+    pub r: u64,
+    pub ts: Option<i64>,
     pub cb: u64,
 }
 
@@ -95,6 +97,11 @@ impl Snapshot {
                     SnapshotServer {
                         server_type: server.server_type.to_label().to_string(),
                         s: server.status,
+                        failed_repositories: server
+                            .failed_repositories
+                            .iter()
+                            .map(|r| r.name().to_owned())
+                            .collect(),
                         repos: server
                             .repositories
                             .iter()
@@ -216,7 +223,7 @@ fn serving_status(
     if server.s == Status::MAINTENANCE {
         return Status::MAINTENANCE;
     }
-    if server.repos.is_empty() {
+    if server.repos.is_empty() || !server.failed_repositories.is_empty() {
         return Status::FAILED;
     }
     if expected_repositories.is_empty() {
@@ -229,5 +236,33 @@ fn serving_status(
         Status::OK
     } else {
         Status::FAILED
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_discovery_is_an_outage_in_daily_rollups() {
+        let snapshot: Snapshot = serde_json::from_value(serde_json::json!({
+            "v":1, "t":1781740800, "run_duration_ms":1, "overall":"FAILED",
+            "categories":{}, "servers":{"s1.test":{
+                "type":"stratum1", "s":"FAILED",
+                "repos":{"good.test":{"r":u64::MAX,"ts":null,"cb":1}},
+                "failed_repositories":["bad.test"]
+            }}
+        }))
+        .unwrap();
+        let rollup = roll_up(
+            NaiveDate::from_ymd_opt(2026, 6, 18).unwrap(),
+            &[snapshot],
+            &[],
+        );
+        let server = &rollup.servers["s1.test"];
+        assert_eq!(server.worst, Status::FAILED);
+        assert_eq!(server.ok_count, 0);
+        assert_eq!(server.last_repos["good.test"].r, u64::MAX);
+        assert_eq!(server.last_repos["good.test"].ts, None);
     }
 }

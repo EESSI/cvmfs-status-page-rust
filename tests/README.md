@@ -140,7 +140,11 @@ The service suite runs loopback fixture servers and exercises the actual install
 binaries outside the checkout. Frozen reference provenance and exact normalization
 rules are in [the fixture README](fixtures/compatibility/README.md). It also tests
 GET/HEAD, ETags, private-path exclusion, failed publication and forced termination
-with recovery. Rust tests cover cold startup, concurrent snapshots, worker
+with recovery, partial/all-failed/empty collections, repository and optional-probe
+deadlines, invalid/absent timestamps, and full unsigned manifest values across
+service restarts. Partial discovery must produce outage history even without an
+expected repository list. Scraper 0.1 fixtures use correctly sized manifest hashes;
+the frozen expected outputs have not been regenerated. Rust tests cover cold startup, concurrent snapshots, worker
 supervision and skipped slots, plus shared storage contracts and file-specific
 migration, locking, permissions, corruption and interruption recovery.
 

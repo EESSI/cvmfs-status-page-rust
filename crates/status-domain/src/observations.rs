@@ -9,16 +9,15 @@ impl std::str::FromStr for Hostname {
     type Err = anyhow::Error;
     fn from_str(name: &str) -> Result<Self> {
         ensure!(
-            name.len() <= 255
+            name.len() <= 253
                 && name.split('.').all(|label| !label.is_empty()
                     && label.len() <= 63
-                    && !label.contains("--")
-                    && label.chars().all(|c| c.is_alphanumeric() || c == '-')
+                    && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
                     && label.chars().next().is_some_and(char::is_alphanumeric)
                     && label.chars().last().is_some_and(char::is_alphanumeric)),
             "invalid hostname"
         );
-        Ok(Self(name.to_owned()))
+        Ok(Self(name.to_ascii_lowercase()))
     }
 }
 impl TryFrom<String> for Hostname {
@@ -57,28 +56,30 @@ pub enum ServerBackendType {
 /// Only the facts consumed by health/history/metrics, not a wire manifest.
 #[derive(Debug, Clone, Serialize)]
 pub struct Manifest {
-    pub(crate) s: i32,
-    pub(crate) t: i64,
+    pub(crate) s: u64,
+    pub(crate) t: Option<i64>,
     pub(crate) b: u64,
     pub(crate) d: u32,
 }
 impl Manifest {
-    pub fn new(revision: i32, timestamp: i64, catalogue_bytes: i64, ttl: i32) -> Result<Self> {
+    pub fn new(
+        revision: u64,
+        timestamp: Option<i64>,
+        catalogue_bytes: u64,
+        ttl: u32,
+    ) -> Result<Self> {
         ensure!(
-            revision >= 0
-                && catalogue_bytes >= 0
-                && ttl >= 0
-                && chrono::DateTime::from_timestamp(timestamp, 0).is_some(),
+            timestamp.is_none_or(|t| t >= 0 && chrono::DateTime::from_timestamp(t, 0).is_some()),
             "invalid repository facts"
         );
         Ok(Self {
             s: revision,
             t: timestamp,
-            b: catalogue_bytes as u64,
-            d: ttl as u32,
+            b: catalogue_bytes,
+            d: ttl,
         })
     }
-    pub fn timestamp(&self) -> i64 {
+    pub fn timestamp(&self) -> Option<i64> {
         self.t
     }
     pub fn catalogue_bytes(&self) -> u64 {
@@ -101,8 +102,30 @@ impl PopulatedRepositoryOrReplica {
         );
         Ok(Self { name, manifest })
     }
-    pub fn revision(&self) -> i32 {
+    pub fn revision(&self) -> u64 {
         self.manifest.s
+    }
+}
+/// A selected repository whose observation could not be collected or converted.
+#[derive(Debug, Clone, Serialize)]
+pub struct RepositoryFailure {
+    name: String,
+    error: String,
+}
+impl RepositoryFailure {
+    pub fn new(name: String, error: String) -> Result<Self> {
+        ensure!(
+            !name.is_empty() && !name.chars().any(char::is_control),
+            "invalid repository name"
+        );
+        ensure!(!error.is_empty(), "missing repository failure reason");
+        Ok(Self { name, error })
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn error(&self) -> &str {
+        &self.error
     }
 }
 pub type ServerMetadata = serde_json::Value;
@@ -132,6 +155,7 @@ pub struct PopulatedServer {
     pub(crate) backend_type: ServerBackendType,
     pub(crate) backend_detected: ServerBackendType,
     pub(crate) repositories: Vec<PopulatedRepositoryOrReplica>,
+    pub(crate) failed_repositories: Vec<RepositoryFailure>,
     pub(crate) metadata: ServerMetadata,
     pub(crate) geoapi_available: bool,
 }
@@ -151,12 +175,17 @@ impl ScrapedServer {
         identity: ServerIdentity,
         detected: ServerBackendType,
         repositories: Vec<PopulatedRepositoryOrReplica>,
+        failed_repositories: Vec<RepositoryFailure>,
         metadata: ServerMetadata,
         geoapi_available: bool,
     ) -> Result<Self> {
         let mut names = BTreeSet::new();
         ensure!(
-            repositories.iter().all(|r| names.insert(&r.name)),
+            repositories
+                .iter()
+                .map(|r| r.name.as_str())
+                .chain(failed_repositories.iter().map(RepositoryFailure::name))
+                .all(|name| names.insert(name)),
             "duplicate repository observations"
         );
         Ok(Self::Populated(Box::new(PopulatedServer {
@@ -165,6 +194,7 @@ impl ScrapedServer {
             backend_type: identity.backend_type,
             backend_detected: detected,
             repositories,
+            failed_repositories,
             metadata,
             geoapi_available,
         })))

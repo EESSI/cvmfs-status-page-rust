@@ -43,6 +43,12 @@ SCENARIOS = (
 )
 
 
+class FixtureServer(ThreadingHTTPServer):
+    # All upstream hosts share this listener. Accommodate the scraper's concurrent
+    # connection burst without the default backlog of five causing TCP retries.
+    request_queue_size = 128
+
+
 class FixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
@@ -93,10 +99,10 @@ class FixtureHandler(BaseHTTPRequestHandler):
             if parts[3:] == [".cvmfspublished"]:
                 revision = 12 - (scenario.lag if host == "alpha.s1.test" else 0)
                 return 200, (
-                    "C0123456789abcdef\nB4096\nAno\nR0123456789abcdef\n"
-                    "X0123456789abcdef\nGyes\nH0123456789abcdef\n"
+                    "C0123456789abcdef0123456789abcdef01234567\nB4096\nAno\nR0123456789abcdef0123456789abcdef\n"
+                    "X0123456789abcdef0123456789abcdef01234567\nGyes\nH0123456789abcdef0123456789abcdef01234567\n"
                     f"T1781740800\nD60\nS{revision}\nN{parts[2]}\n"
-                    "M0123456789abcdef\nY0123456789abcdef\n--\nfixture-signature\n"
+                    "M0123456789abcdef0123456789abcdef01234567\nY0123456789abcdef0123456789abcdef01234567\n--\nfixture-signature\n"
                 )
             if parts[3:6] == ["api", "v1.0", "geo"] and len(parts) == 8:
                 return 200, "1,2,3"
@@ -203,7 +209,7 @@ class HtmlOutputComparison(unittest.TestCase):
                 root = Path(tmp)
                 config = root / "config.json"
                 config.write_text(json.dumps(self.configuration(scenario)))
-                with ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler) as server:
+                with FixtureServer(("127.0.0.1", 0), FixtureHandler) as server:
                     server.scenario = scenario
                     server.unexpected = []
                     thread = threading.Thread(target=server.serve_forever, daemon=True)

@@ -174,6 +174,7 @@ impl ServerPresentation for Server {
     fn to_server_status(&self) -> ServerStatus {
         ServerStatus {
             name: self.hostname.clone().to_string(),
+            failed_repositories: self.failed_repositories.clone(),
             status: self.status,
             metadata: self.metadata.clone(),
             update_class: self.status.class().to_string(),
