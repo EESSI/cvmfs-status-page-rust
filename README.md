@@ -143,6 +143,52 @@ binary. Configuration, templates, resources, history, and generated output are
 left in place. Running processes keep using the old binary until their next run
 or restart.
 
+### In-place updates (unreleased)
+
+Builds containing the updater can replace their own executable from GitHub
+Releases. Running without `--tag` selects GitHub's latest stable release, including
+major upgrades, and leaves the executable alone if that version is not newer:
+
+```sh
+cvmfs-status-page-rust self-update
+cvmfs-status-page-rust self-update --tag v0.0.2
+cvmfs-status-page-rust self-update --tag 0.0.2 --yes
+```
+
+`--tag` accepts a published semantic-version release with or without the leading
+`v`, including prereleases. It installs that exact version even if it means a
+downgrade or reinstall. Branches, commit hashes and unpublished tags are not
+supported. Add `--yes` to skip confirmation; it is required for unattended use.
+`GH_TOKEN` or `GITHUB_TOKEN` can supply GitHub API authentication, with `GH_TOKEN`
+taking precedence.
+
+Updates support Linux x86_64 and aarch64. They select the static musl archive,
+except for v0.0.1's original GNU archive, require its `.sha256` checksum, and check
+the downloaded executable's `--version` before replacing the installed file.
+The version probe runs from a temporary copy beside the installed executable, so
+`/tmp` or `TMPDIR` can be mounted `noexec`. The executable's directory must be
+writable; the existing executable itself can be read-only. Staging files are
+removed on success or failure. Configuration, custom templates,
+resources, history and generated output remain in place. Review the release's
+upgrade requirements before updating; selecting an older binary does not migrate
+state back to its older format.
+
+The service provides the same command:
+
+```sh
+cvmfs-status-server self-update
+cvmfs-status-server self-update --tag vX.Y.Z --yes
+```
+
+Each command replaces only the executable invoked. Restart a running service to
+use its new version. The requested release must contain that executable; v0.0.2
+and earlier contain only the generator. For container deployments, pull or build
+the desired image and recreate the container.
+
+Existing v0.0.2 installations need the installer or a manual installation to
+obtain a future release containing this command. Explicitly installing v0.0.2 or
+an older release removes self-update support again.
+
 ### Manual prebuilt install
 
 Download the release asset for your architecture from GitHub Releases:

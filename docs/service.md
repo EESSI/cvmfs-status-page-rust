@@ -165,6 +165,13 @@ image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:VERSION`, as well as bot
 static binaries in the existing musl archives. The installer continues installing
 the generator; extract `cvmfs-status-server` from the archive to install the service.
 
+For standalone installations, `cvmfs-status-server self-update` installs the latest
+stable release; `--tag vX.Y.Z` selects a specific release and `--yes` skips
+confirmation. Restart the service after replacing its executable. See the
+[in-place update guide](../README.md#in-place-updates-unreleased) for verification,
+permissions and rollback behavior. Update container deployments by replacing
+their image and recreating the container.
+
 The service is unreleased; build the local image for the supplied Compose example:
 
 ```sh
