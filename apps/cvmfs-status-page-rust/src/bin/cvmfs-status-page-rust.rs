@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use cvmfs_status_page_rust::updater::{Binary, MaintenanceCommand};
 use status_application::{config::ConfigManager, Generator, OutputPaths};
 use status_presentation::Presentation;
 use status_sources::NetworkSource;
@@ -10,9 +11,13 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
     about = "An EESSI status page generator.",
     author = env!("CARGO_PKG_AUTHORS"),
     version = env!("CARGO_PKG_VERSION"),
+    args_conflicts_with_subcommands = true,
     after_help = "Set the RUST_LOG environment variable to your desired log level for logging."
 )]
 struct Opt {
+    #[command(subcommand)]
+    command: Option<MaintenanceCommand>,
+
     #[arg(
         short,
         long,
@@ -73,10 +78,16 @@ struct Opt {
     prometheus_metrics: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     env_logger::init();
-    let args = Opt::parse();
+    let mut args = Opt::parse();
+    if let Some(command) = args.command.take() {
+        return command.run(Binary::Generator);
+    }
+    tokio::runtime::Runtime::new()?.block_on(generate(args))
+}
+
+async fn generate(args: Opt) -> Result<()> {
     let config = ConfigManager::new(
         args.configuration
             .to_str()

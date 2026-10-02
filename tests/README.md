@@ -153,6 +153,13 @@ and arm64 runners. Musl checks in PR and release jobs retain static binary cover
 Release metadata selects the composition package by name rather than workspace
 package order.
 
+The workspace suite also tests self-updates against local GitHub release fixtures:
+latest and explicit-tag selection, major upgrades, reinstalls, downgrades,
+prereleases, archive selection, checksum verification and binary version checks.
+Failure cases assert that the installed file survives unchanged. CLI tests run
+both binaries without configuration and verify maintenance help and argument
+errors without contacting GitHub.
+
 The same workspace suite covers the [generic framework](../docs/framework.md):
 validated input and Rhai isolation, per-destination grace, durable outbox leases,
 retry ordering, renderer/storage failures, private checkpoints and recovery.

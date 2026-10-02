@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `self-update` for the generator and service, using GitHub's latest stable
+  release or an explicit `--tag`, with `--yes` for unattended updates. Verify the
+  published SHA-256 checksum and executable version before replacing the invoked
+  binary; explicit tags also support reinstalls and downgrades.
 - Experimental source-independent framework crates for validated status documents,
   optional bounded Rhai evaluation, swappable presentation, checkpoint persistence
   and caller-owned update/delivery execution. A `status-feed` example accepts JSON
