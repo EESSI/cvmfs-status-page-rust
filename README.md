@@ -165,7 +165,10 @@ taking precedence.
 Updates support Linux x86_64 and aarch64. They select the static musl archive,
 except for v0.0.1's original GNU archive, require its `.sha256` checksum, and check
 the downloaded executable's `--version` before replacing the installed file.
-The executable's directory must be writable. Configuration, custom templates,
+The version probe runs from a temporary copy beside the installed executable, so
+`/tmp` or `TMPDIR` can be mounted `noexec`. The executable's directory must be
+writable; the existing executable itself can be read-only. Staging files are
+removed on success or failure. Configuration, custom templates,
 resources, history and generated output remain in place. Review the release's
 upgrade requirements before updating; selecting an older binary does not migrate
 state back to its older format.

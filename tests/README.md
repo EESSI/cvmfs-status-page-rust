@@ -156,6 +156,10 @@ package order.
 The workspace suite also tests self-updates against local GitHub release fixtures:
 latest and explicit-tag selection, major upgrades, reinstalls, downgrades,
 prereleases, archive selection, checksum verification and binary version checks.
+Coverage includes read-only executables in writable directories, probing from
+the installation directory, and staging-file cleanup on success and failure.
+The updater fixtures keep installation paths on the test executable's filesystem,
+so the updater tests can also run with `TMPDIR` on a `noexec` mount.
 Failure cases assert that the installed file survives unchanged. CLI tests run
 both binaries without configuration and verify maintenance help and argument
 errors without contacting GitHub.

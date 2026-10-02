@@ -2,8 +2,9 @@
 use anyhow::{bail, ensure, Context, Result};
 use clap::{Args, Subcommand};
 use self_update::backends::github::{Update, UpdateBuilder};
+use self_update::UpdateConfig;
 use semver::Version;
-use std::{env::consts, io::IsTerminal, process::Command, time::Duration};
+use std::{env::consts, fs, io::IsTerminal, process::Command, time::Duration};
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PACKAGE: &str = "cvmfs-status-page-rust";
@@ -85,14 +86,14 @@ fn update(args: &UpdateArgs, binary: Binary, mut builder: UpdateBuilder) -> Resu
         .bin_name(binary.name())
         .current_version(CURRENT_VERSION)
         .timeout(Duration::from_secs(120))
-        .no_confirm(args.yes)
-        .check_install_path_writable(true);
+        .no_confirm(args.yes);
 
+    let updater = builder.build()?;
     let release = match &args.tag {
-        Some(tag) => builder.build()?.get_release_version(tag)?,
+        Some(tag) => updater.get_release_version(tag)?,
         None => {
             // Use GitHub's designated stable release, including major upgrades.
-            let releases = builder.build()?.get_latest_release()?;
+            let releases = updater.get_latest_release()?;
             let release = releases.latest().context("no published release found")?;
             if !self_update::version::bump_is_greater(CURRENT_VERSION, release.version())? {
                 println!(
@@ -116,6 +117,24 @@ fn update(args: &UpdateArgs, binary: Binary, mut builder: UpdateBuilder) -> Resu
     if !release.assets().iter().any(|asset| asset.name() == archive) {
         bail!("release {tag} has no archive {archive}");
     }
+    let install_directory = updater
+        .bin_install_path()
+        .parent()
+        .context("installed executable has no parent directory")?;
+    // Replacement needs directory write access, even when the installed file is
+    // read-only. This also gives the version probe an executable filesystem when
+    // the download/extraction directory is mounted noexec. Close the writable
+    // handle before executing the candidate to avoid ETXTBSY on Linux.
+    let staged = tempfile::Builder::new()
+        .prefix(".cvmfs-status-update-")
+        .tempfile_in(install_directory)
+        .with_context(|| {
+            format!(
+                "cannot stage update in {}; the installation directory must be writable",
+                install_directory.display()
+            )
+        })?
+        .into_temp_path();
     let expected_version = format!("{} {version}", binary.name());
     builder
         .release_tag(tag)
@@ -126,7 +145,8 @@ fn update(args: &UpdateArgs, binary: Binary, mut builder: UpdateBuilder) -> Resu
         // the full name so asset ordering cannot select the checksum as a binary.
         .asset_matcher(move |assets| assets.iter().find(|a| a.name() == archive).cloned())
         .verify_binary(move |path| {
-            let output = Command::new(path).arg("--version").output()?;
+            fs::copy(path, &staged)?;
+            let output = Command::new(&staged).arg("--version").output()?;
             if !output.status.success()
                 || String::from_utf8_lossy(&output.stdout).trim() != expected_version
             {

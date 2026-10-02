@@ -7,15 +7,22 @@ use std::{
     fs,
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
+    os::unix::fs::PermissionsExt,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
     },
     thread::{self, JoinHandle},
 };
 use tar::{Builder, Header};
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
+
+// A concurrent fork can temporarily inherit another test's writable candidate
+// descriptor and make exec fail with ETXTBSY, even after its writer closes it.
+// The CLI runs one update per process; serialize these write-and-exec fixtures.
+// https://github.com/rust-lang/rust/issues/114554
+static UPDATE_FIXTURES: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Copy)]
 enum Artifact {
@@ -26,9 +33,12 @@ enum Artifact {
     MissingBinary,
     WrongVersion,
     CannotRun,
+    NotExecutable,
+    RequiresInstallationDirectory,
 }
 
 struct Fixture {
+    _exclusive: MutexGuard<'static, ()>,
     _root: TempDir,
     installed: PathBuf,
     base: String,
@@ -39,7 +49,16 @@ struct Fixture {
 
 impl Fixture {
     fn new(version: &str, artifact: Artifact) -> Self {
-        let root = tempdir().unwrap();
+        let exclusive = UPDATE_FIXTURES
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        // Keep the installation on the test executable's filesystem so the
+        // extraction TMPDIR can independently be mounted noexec.
+        let executable = std::env::current_exe().unwrap();
+        let root = tempfile::Builder::new()
+            .prefix("self-update-install-")
+            .tempdir_in(executable.parent().unwrap())
+            .unwrap();
         let installed = root.path().join("installed-binary");
         fs::write(&installed, b"original binary").unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -55,11 +74,19 @@ impl Fixture {
             let script = match artifact {
                 Artifact::WrongVersion => format!("#!/bin/sh\necho '{} 0.0.0'\n", binary.name()),
                 Artifact::CannotRun => "#!/bin/sh\nexit 1\n".to_owned(),
+                Artifact::RequiresInstallationDirectory => format!(
+                    "#!/bin/sh\n[ -f \"$(dirname \"$0\")/installed-binary\" ] || exit 42\necho '{} {version}'\n",
+                    binary.name()
+                ),
                 _ => format!("#!/bin/sh\necho '{} {version}'\n", binary.name()),
             };
             let mut header = Header::new_gnu();
             header.set_size(script.len() as u64);
-            header.set_mode(0o755);
+            header.set_mode(if matches!(artifact, Artifact::NotExecutable) {
+                0o644
+            } else {
+                0o755
+            });
             header.set_cksum();
             tar.append_data(
                 &mut header,
@@ -143,6 +170,7 @@ impl Fixture {
             }
         });
         Self {
+            _exclusive: exclusive,
             _root: root,
             installed,
             base,
@@ -169,6 +197,17 @@ impl Fixture {
 
     fn requests(&self) -> Vec<String> {
         self.requests.lock().unwrap().clone()
+    }
+
+    fn assert_no_staging_files(&self) {
+        let files: Vec<_> = self
+            ._root
+            .path()
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(files, vec![self.installed.clone()]);
     }
 }
 
@@ -240,6 +279,7 @@ fn latest_never_reinstalls_or_downgrades(version: &str) {
     missing_server_binary = { Artifact::MissingBinary, "cvmfs-status-server" },
     wrong_version = { Artifact::WrongVersion, "did not report" },
     binary_cannot_run = { Artifact::CannotRun, "did not report" },
+    missing_execute_permission = { Artifact::NotExecutable, "permission denied" },
 )]
 fn failures_preserve_the_installed_binary(artifact: Artifact, expected_error: &str) {
     let fixture = Fixture::new("1.0.0", artifact);
@@ -249,6 +289,57 @@ fn failures_preserve_the_installed_binary(artifact: Artifact, expected_error: &s
         "{error:#}"
     );
     assert_eq!(fs::read(&fixture.installed).unwrap(), b"original binary");
+    fixture.assert_no_staging_files();
+}
+
+#[test]
+fn replaces_read_only_executable_in_writable_directory() {
+    let fixture = Fixture::new("1.0.0", Artifact::Valid);
+    fs::set_permissions(&fixture.installed, fs::Permissions::from_mode(0o555)).unwrap();
+    assert!(fixture.update(Binary::Generator, None).unwrap());
+    let output = Command::new(&fixture.installed)
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap().trim(),
+        format!("{PACKAGE} 1.0.0")
+    );
+    fixture.assert_no_staging_files();
+}
+
+#[test]
+fn probes_candidate_in_the_installation_directory() {
+    let fixture = Fixture::new("1.0.0", Artifact::RequiresInstallationDirectory);
+    assert!(fixture.update(Binary::Generator, None).unwrap());
+    fixture.assert_no_staging_files();
+}
+
+#[test]
+fn unwritable_install_directory_fails_before_download() {
+    let fixture = Fixture::new("1.0.0", Artifact::Valid);
+    let directory = fixture._root.path();
+    fs::set_permissions(directory, fs::Permissions::from_mode(0o555)).unwrap();
+    // Privileged container test runners can bypass ordinary permission bits.
+    let probe = tempfile::NamedTempFile::new_in(directory);
+    if probe.is_ok() {
+        fs::set_permissions(directory, fs::Permissions::from_mode(0o755)).unwrap();
+        eprintln!(
+            "skipping directory permission assertion: runner can write mode 0555 directories"
+        );
+        return;
+    }
+    let result = fixture.update(Binary::Generator, None);
+    fs::set_permissions(directory, fs::Permissions::from_mode(0o755)).unwrap();
+    let error = result.unwrap_err();
+    assert!(
+        format!("{error:#}").contains("installation directory must be writable"),
+        "{error:#}"
+    );
+    assert_eq!(fs::read(&fixture.installed).unwrap(), b"original binary");
+    assert_eq!(fixture.requests().len(), 1);
+    fixture.assert_no_staging_files();
 }
 
 #[test]
