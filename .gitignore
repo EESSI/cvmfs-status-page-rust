@@ -1,4 +1,5 @@
 /target
+/dist/
 /state/
 /feed-state/
 /feed-public/

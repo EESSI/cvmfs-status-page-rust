@@ -158,12 +158,16 @@ from diagnostics and compatibility identities.
 
 ## Containers
 
-The production image runs as UID/GID `10001:10001`, includes CA certificates, and
-executes the service as PID 1. CI builds and smoke-tests the actual production
-image on native amd64 and arm64 runners. Future tagged releases publish a combined
-image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:VERSION`, as well as both
-static binaries in the existing musl archives. The installer continues installing
-the generator; extract `cvmfs-status-server` from the archive to install the service.
+The production image uses `scratch` and contains only the static musl server,
+the HTTPS CA bundle, and runtime directories. It runs as UID/GID `10001:10001`
+and executes the service as PID 1; there is no shell or package manager.
+CI builds and smoke-tests the actual production image on native amd64 and arm64
+runners, including packaging a prebuilt binary. Tagged releases reuse the exact
+server binary from each checksum-verified release archive and publish a combined
+image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z`. Architecture tags
+are `vX.Y.Z-amd64` and `vX.Y.Z-arm64`; there is no `latest` tag. The archives
+contain both static binaries. The installer continues installing the generator;
+extract `cvmfs-status-server` from the archive to install the standalone service.
 
 For standalone installations, `cvmfs-status-server self-update` installs the latest
 stable release; `--tag vX.Y.Z` selects a specific release and `--yes` skips
@@ -179,11 +183,35 @@ docker compose build
 docker compose up -d
 ```
 
+Once a release containing the service has been published, select its version
+tag with `CVMFS_STATUS_IMAGE` to use the prebuilt image. Replace `vX.Y.Z` below
+with that release tag; v0.0.2 predates the service and has no container image:
+
+```sh
+export CVMFS_STATUS_IMAGE=ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z
+docker compose up -d --no-build --pull always
+```
+
+To package an already verified musl server locally, place it at
+`dist/cvmfs-status-server`, then run:
+
+```sh
+sh scripts/check-static-binary.sh dist/cvmfs-status-server
+docker build --target production --build-arg BINARY_SOURCE=prebuilt \
+  -t cvmfs-status-server:local .
+```
+
+Use the binary matching the build host's Linux architecture. A normal
+`docker compose build` compiles it from source for musl instead.
+
 [compose.yaml](../compose.yaml) uses a read-only root, a persistent state volume,
 read-only configuration/overrides, dropped capabilities, and a 35-second stop
 period. Both container listeners bind `0.0.0.0`; published host ports bind
 `127.0.0.1`. Only trusted containers should share its network. Mount custom Grafana
 credentials through your deployment's environment/secret mechanism.
+The image includes `/etc/ssl/certs/ca-certificates.crt` and sets `SSL_CERT_FILE`
+to that path. To trust a private CA, mount an extended PEM bundle read-only at
+that path, or mount it elsewhere and set `SSL_CERT_FILE` accordingly.
 
 For a bind-mounted state directory, create it first and assign ownership to
 `10001:10001`. Configuration and override files need only be readable. Do not mount

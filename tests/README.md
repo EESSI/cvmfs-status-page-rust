@@ -136,6 +136,15 @@ python3 tests/test_container.py cvmfs-status-server:test
 docker build --target musl-check -t cvmfs-status-musl-check .
 ```
 
+Container smoke tests inspect the filesystem for the static server, CA bundle,
+state ownership and temporary-directory permissions before exercising the service.
+CI also rebuilds the production image with `--build-arg BINARY_SOURCE=prebuilt`
+using a `dist/cvmfs-status-server` input with restrictive permissions to verify
+that packaging makes it executable by the non-root user.
+Passing `--binary dist/cvmfs-status-server` to
+`test_container.py` verifies that the image contains that exact binary. Release
+jobs use this path with the checksum-verified musl archive for each architecture.
+
 The service suite runs loopback fixture servers and exercises the actual installed
 binaries outside the checkout. Frozen reference provenance and exact normalization
 rules are in [the fixture README](fixtures/compatibility/README.md). It also tests

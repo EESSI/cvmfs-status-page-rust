@@ -191,17 +191,37 @@ jobs:
       matrix:
         include:
           - arch: amd64
+            target: x86_64-unknown-linux-musl
             runner: ubuntu-24.04
           - arch: arm64
+            target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
       - name: Check workspace build context
         run: python3 tests/test_build_context.py
+      - name: Download verified release archive
+        uses: actions/download-artifact@v8
+        with:
+          name: release-${{ matrix.target }}
+          path: dist
+      - name: Extract release binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          package="${BINARY_NAME}-${GITHUB_REF_NAME#v}-${TARGET}"
+          cd dist
+          sha256sum --check "${package}.tar.gz.sha256"
+          tar -xzf "${package}.tar.gz" --strip-components=1 "${package}/cvmfs-status-server"
+          sh ../scripts/check-static-binary.sh ./cvmfs-status-server
       - name: Build production image
-        run: docker build --target production -t cvmfs-status-server:test .
+        run: |
+          docker build --target production --build-arg BINARY_SOURCE=prebuilt \
+            --label "org.opencontainers.image.version=${GITHUB_REF_NAME}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t cvmfs-status-server:test .
       - name: Smoke test production image and recovery
-        run: python3 tests/test_container.py cvmfs-status-server:test
+        run: python3 tests/test_container.py cvmfs-status-server:test --binary dist/cvmfs-status-server
       - name: Publish tested architecture image
         env:
           GH_TOKEN: ${{ github.token }}

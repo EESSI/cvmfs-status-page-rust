@@ -1,8 +1,10 @@
 """Smoke-test the actual production image with persistent state and a read-only root."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
+import tarfile
 import tempfile
 import time
 from urllib.error import HTTPError, URLError
@@ -16,7 +18,28 @@ def docker(*args):
     return subprocess.check_output(["docker", *args], text=True).strip()
 
 
-def smoke(image):
+def check_runtime(container, root, binary):
+    archive = root / "rootfs.tar"
+    docker("export", "--output", str(archive), container)
+    with tarfile.open(archive) as filesystem:
+        members = {member.name.removeprefix("./").lstrip("/"): member for member in filesystem.getmembers()}
+        # Container engines may add these files when creating a container.
+        engine_files = {"etc/hosts", "etc/hostname", "etc/resolv.conf", ".dockerenv", "run/.containerenv"}
+        files = {name for name, member in members.items() if not member.isdir()}
+        executable = "usr/local/bin/cvmfs-status-server"
+        certificates = "etc/ssl/certs/ca-certificates.crt"
+        assert files - engine_files == {executable, certificates}, files
+        assert members[executable].mode == 0o755
+        assert b"-----BEGIN CERTIFICATE-----" in filesystem.extractfile(members[certificates]).read()
+        state = members["var/lib/cvmfs-status"]
+        assert (state.uid, state.gid, state.mode) == (10001, 10001, 0o755), state
+        assert members["tmp"].mode == 0o1777
+        if binary:
+            actual = hashlib.sha256(filesystem.extractfile(members[executable]).read()).digest()
+            assert actual == hashlib.sha256(binary.read_bytes()).digest(), "Image binary differs from release binary"
+
+
+def smoke(image, binary=None):
     volume = "cvmfs-status-test-" + uuid.uuid4().hex
     container = None
     config_container = None
@@ -37,6 +60,7 @@ def smoke(image):
             # whose user namespace cannot read a host user's bind-mounted files.
             config_container = docker("create", "--user=0:0", "-v",
                                       f"{config_volume}:/etc/cvmfs-status", image)
+            check_runtime(config_container, root, binary)
             docker("cp", str(config), f"{config_container}:/etc/cvmfs-status/config.json")
             docker("rm", config_container)
             config_container = None
@@ -80,7 +104,7 @@ def smoke(image):
             assert info["Config"]["User"] == "10001:10001"
             assert info["HostConfig"]["ReadonlyRootfs"]
             assert info["State"]["ExitCode"] == 0, info["State"]
-            print("Production image passed: non-root, read-only root/config, persistence, restart and SIGTERM")
+            print("Production image passed: minimal rootfs, CA bundle, non-root, read-only root/config, persistence, restart and SIGTERM")
     finally:
         if config_container:
             docker("rm", "-f", config_container)
@@ -93,4 +117,6 @@ def smoke(image):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image")
-    smoke(parser.parse_args().image)
+    parser.add_argument("--binary", type=Path, help="Require the image to contain this exact release binary")
+    args = parser.parse_args()
+    smoke(args.image, args.binary)
