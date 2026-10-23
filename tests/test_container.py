@@ -24,7 +24,8 @@ def check_runtime(container, root, binary):
     with tarfile.open(archive) as filesystem:
         members = {member.name.removeprefix("./").lstrip("/"): member for member in filesystem.getmembers()}
         # Container engines may add these files when creating a container.
-        engine_files = {"etc/hosts", "etc/hostname", "etc/resolv.conf", ".dockerenv", "run/.containerenv"}
+        engine_files = {"etc/hosts", "etc/hostname", "etc/resolv.conf", "etc/mtab",
+                        "dev/console", ".dockerenv", "run/.containerenv"}
         files = {name for name, member in members.items() if not member.isdir()}
         executable = "usr/local/bin/cvmfs-status-server"
         certificates = "etc/ssl/certs/ca-certificates.crt"
