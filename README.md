@@ -59,8 +59,10 @@ Tagged releases containing the service will also publish
 as the matching release archive. The image contains the server and HTTPS CA
 certificates, runs as UID/GID `10001:10001`, and has no shell or package manager.
 See [container deployment](docs/service.md#containers) for local builds and how
-to select a published image in Compose. The existing v0.0.2 release predates
-these images.
+to select a published image in Compose, [configuration files and mounts](docs/service.md#configuration-files-and-mounts),
+a complete [Docker run example](docs/service.md#docker-without-compose), and
+[service endpoints](docs/service.md#endpoints-and-monitoring). The existing
+v0.0.2 release predates these images.
 
 ### Upgrading existing cron installations
 
