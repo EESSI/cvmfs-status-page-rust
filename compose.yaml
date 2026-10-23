@@ -1,7 +1,7 @@
 services:
   status:
     build: .
-    image: cvmfs-status-server:local
+    image: ${CVMFS_STATUS_IMAGE:-cvmfs-status-server:local}
     user: "10001:10001"
     read_only: true
     restart: unless-stopped

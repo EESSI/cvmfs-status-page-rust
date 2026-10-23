@@ -158,12 +158,16 @@ from diagnostics and compatibility identities.
 
 ## Containers
 
-The production image runs as UID/GID `10001:10001`, includes CA certificates, and
-executes the service as PID 1. CI builds and smoke-tests the actual production
-image on native amd64 and arm64 runners. Future tagged releases publish a combined
-image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:VERSION`, as well as both
-static binaries in the existing musl archives. The installer continues installing
-the generator; extract `cvmfs-status-server` from the archive to install the service.
+The production image uses `scratch` and contains only the static musl server,
+the HTTPS CA bundle, and runtime directories. It runs as UID/GID `10001:10001`
+and executes the service as PID 1; there is no shell or package manager.
+CI builds and smoke-tests the actual production image on native amd64 and arm64
+runners, including packaging a prebuilt binary. Tagged releases reuse the exact
+server binary from each checksum-verified release archive and publish a combined
+image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z`. Architecture tags
+are `vX.Y.Z-amd64` and `vX.Y.Z-arm64`; there is no `latest` tag. The archives
+contain both static binaries. The installer continues installing the generator;
+extract `cvmfs-status-server` from the archive to install the standalone service.
 
 For standalone installations, `cvmfs-status-server self-update` installs the latest
 stable release; `--tag vX.Y.Z` selects a specific release and `--yes` skips
@@ -172,25 +176,218 @@ confirmation. Restart the service after replacing its executable. See the
 permissions and rollback behavior. Update container deployments by replacing
 their image and recreating the container.
 
-The service is unreleased; build the local image for the supplied Compose example:
+### Configuration files and mounts
+
+The image runs the HTTP service continuously: it collects CVMFS status, evaluates
+rules, retains history and serves the generated pages, JSON and optional status
+metrics. No cron job or separate static web server is needed. The image does not
+include a site configuration; mount your own files at startup.
+
+The supplied [Compose file](../compose.yaml) uses these mounts:
+
+| Host file or volume | Container path | Purpose |
+| --- | --- | --- |
+| `./config.json` | `/etc/cvmfs-status/config.json` | Required status configuration, mounted read-only. |
+| `./deploy/service.json` | `/etc/cvmfs-status/service.json` | Service settings, mounted read-only. |
+| `./deploy/overrides` | `/etc/cvmfs-status/overrides` | Optional template/resource overrides, mounted read-only. |
+| `status-state` named volume | `/var/lib/cvmfs-status` | Writable private state, history and committed generations. |
+
+Start with [config.json](../config.json) and edit `servers`, `repositories`,
+`ignored_repositories`, status `rules` and page `meta` for your deployment. The
+same file supports repository filtering, replication grace, history retention
+and optional Grafana metrics; see the [status configuration reference](../README.md#configuration).
+Status configuration is included in public JSON, so keep credentials out of it.
+
+The separate [deploy/service.json](../deploy/service.json) configures the process:
+
+```json
+{
+  "public_address": "0.0.0.0:8080",
+  "operational_address": "0.0.0.0:9090",
+  "state_directory": "/var/lib/cvmfs-status",
+  "interval_seconds": 120,
+  "collection_deadline_seconds": 120,
+  "shutdown_grace_seconds": 30,
+  "override_directory": "/etc/cvmfs-status/overrides",
+  "prometheus_metrics": true
+}
+```
+
+Bind both listeners to `0.0.0.0` inside the container so published ports can reach
+them; host-side bindings below restrict access to `127.0.0.1`. The service file
+is optional when you supply the corresponding CLI options. See the
+[complete settings table](#configuration) for output filenames, defaults and
+accepted ranges. CLI options override the service file; unknown service-file
+keys are rejected. Paths refer to the container filesystem, with relative paths
+resolved from `/var/lib/cvmfs-status`. Keeping `history.directory` as `history`
+puts it inside the persistent state volume.
+
+Create the host files before starting the container. They must be readable by
+UID/GID `10001:10001`, and override directories must be traversable. From the
+repository root, after editing the examples:
+
+```sh
+chmod 0644 config.json deploy/service.json
+chmod -R a+rX deploy/overrides
+```
+
+To use files elsewhere on the host, change the source paths on the left side of
+the Compose bind mounts; keep the container paths aligned with the command and
+service settings. Mount individual configuration files so the rest of
+`/etc/cvmfs-status` remains available for overrides.
+
+### Docker Compose
+
+The service is unreleased; run these commands from the repository root to build
+the local image and start the supplied Compose deployment:
 
 ```sh
 docker compose build
 docker compose up -d
 ```
 
-[compose.yaml](../compose.yaml) uses a read-only root, a persistent state volume,
-read-only configuration/overrides, dropped capabilities, and a 35-second stop
-period. Both container listeners bind `0.0.0.0`; published host ports bind
-`127.0.0.1`. Only trusted containers should share its network. Mount custom Grafana
-credentials through your deployment's environment/secret mechanism.
+Once a release containing the service has been published, select its version
+tag with `CVMFS_STATUS_IMAGE` to use the prebuilt image. Replace `vX.Y.Z` below
+with that release tag; v0.0.2 predates the service and has no container image:
+
+```sh
+export CVMFS_STATUS_IMAGE=ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z
+docker compose up -d --no-build --pull always
+```
+
+[compose.yaml](../compose.yaml) uses a read-only root, dropped capabilities, a
+temporary `/tmp` filesystem and a 35-second stop period. Its `command` selects
+both mounted JSON files. To override a service-file setting, append an option
+such as `--interval-seconds=60` to that list, retaining the two configuration
+options. Keep the stop period longer than `shutdown_grace_seconds`.
+
+### Docker without Compose
+
+From the repository root, use the same configuration files and overrides:
+
+```sh
+docker build --target production -t cvmfs-status-server:local .
+docker volume create cvmfs-status-state
+docker run -d --name cvmfs-status \
+  --restart unless-stopped --stop-timeout 35 \
+  --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+  --publish 127.0.0.1:8080:8080 \
+  --publish 127.0.0.1:9090:9090 \
+  --mount type=bind,src="$(pwd)/config.json",dst=/etc/cvmfs-status/config.json,readonly \
+  --mount type=bind,src="$(pwd)/deploy/service.json",dst=/etc/cvmfs-status/service.json,readonly \
+  --mount type=bind,src="$(pwd)/deploy/overrides",dst=/etc/cvmfs-status/overrides,readonly \
+  --mount type=volume,src=cvmfs-status-state,dst=/var/lib/cvmfs-status \
+  --env RUST_LOG=info \
+  "${CVMFS_STATUS_IMAGE:-cvmfs-status-server:local}" \
+  --configuration=/etc/cvmfs-status/config.json \
+  --service-configuration=/etc/cvmfs-status/service.json
+```
+
+For a published image, set `CVMFS_STATUS_IMAGE` as above and omit the build
+command. The image entrypoint is already `cvmfs-status-server`: arguments after
+the image name are service options. Supplying arguments replaces the image's
+default command, so retain the configuration arguments shown here. If you omit
+the service file, specify both listener addresses and the state directory as
+CLI options. To omit the overrides mount, also remove `override_directory`
+from the service file; embedded templates and resources are then used.
+
+### Endpoints and monitoring
+
+With the supplied service settings, the container provides:
+
+| Listener | Paths | Purpose |
+| --- | --- | --- |
+| Public, port `8080` | `/`, `/index.html`, `/status.json` | Status page and current CVMFS status. |
+| Public, port `8080` | `/trends.html`, `/trends.json`, `/history.json` | Trends and history; `history.json` requires enabled history. |
+| Public, port `8080` | `/metrics` | CVMFS status metrics, enabled by `prometheus_metrics`. |
+| Operational, port `9090` | `/readyz` | HTTP 200 when a usable publication exists and the worker is running; otherwise 503. |
+| Operational, port `9090` | `/diagnostics`, `/metrics` | Publication freshness, failures, effective service settings and `cvmfs_service_*` metrics. |
+
+Output names can be changed through the [service settings](#configuration).
+Readiness does not mean upstream CVMFS servers are healthy: inspect status JSON
+or public metrics for that. A restored but stale publication can remain ready;
+monitor publication age as described under [Operations](#operations).
+
+Run checks from the host or your monitoring system:
+
+```sh
+curl --fail http://127.0.0.1:9090/readyz
+curl --fail http://127.0.0.1:9090/diagnostics
+curl --fail http://127.0.0.1:8080/status.json
+docker compose logs --tail=100 status
+```
+
+For the plain Docker example, use `docker logs --tail=100 cvmfs-status`.
+The image has no shell, `curl` or built-in Docker health check. Use an external
+HTTP probe. The service provides HTTP without built-in TLS or authentication;
+put the public listener behind a reverse proxy and keep the operational listener
+private. Only trusted containers should share its network. There is no
+configuration-editing API, and the CVMFS service does not yet integrate the
+framework's webhook alert delivery.
+
+### Logging, credentials and configuration changes
+
+Set `RUST_LOG` to control service logging, for example `info` or `debug`; the
+service writes logs to stderr. Operational JSON settings are configured through
+the service file or CLI, not through environment-variable equivalents.
+
+For [Grafana metrics](../README.md#grafana-backed-disk-usage-metrics), set
+`external_metrics.token_env` in the status configuration to the name of an
+environment variable, such as `GRAFANA_TOKEN`. Pass that already-exported variable
+with `--env GRAFANA_TOKEN` in `docker run`, or add it to the Compose service's
+`environment` mapping:
+
+```yaml
+services:
+  status:
+    environment:
+      GRAFANA_TOKEN: ${GRAFANA_TOKEN:?Set GRAFANA_TOKEN before starting Compose}
+```
+
+This can be saved as `compose.override.yaml` beside `compose.yaml`. A mounted
+secret file alone is not read as a token; arrange for your deployment to supply
+the named environment variable. Do not put the token in either JSON file or
+public resources.
+
+The image includes `/etc/ssl/certs/ca-certificates.crt` and sets `SSL_CERT_FILE`
+to that path. To trust a private CA, mount an extended PEM bundle read-only at
+that path, or mount it elsewhere and set `SSL_CERT_FILE` accordingly.
+
+Configuration and overrides are read at startup. After editing mounted files,
+recreate the container to apply them, including files replaced by an editor:
+
+```sh
+docker compose up -d --force-recreate
+```
+
+For plain Docker, stop and remove `cvmfs-status`, then repeat the run command
+using the same state volume. Keep the volume across configuration changes and
+image upgrades. Run one service instance per state volume; simultaneous writers
+and network filesystems are unsupported. The service handles SIGTERM and SIGINT
+and recovers committed state after a forced termination.
 
 For a bind-mounted state directory, create it first and assign ownership to
-`10001:10001`. Configuration and override files need only be readable. Do not mount
-state below a public static web root. Back up the entire state directory plus any
+`10001:10001`; with a rootless engine, translate these container IDs through its
+host UID/GID mapping. Configuration and override files need only be readable.
+Do not mount state below a public static web root. Back up the entire state directory plus any
 absolute history directory and configuration/overrides with the writer stopped.
 Restore ownership before restarting. Backups may contain hostnames and historical
 operational data; keep them private.
+
+### Packaging a prebuilt binary
+
+To package an already verified musl server locally, place it at
+`dist/cvmfs-status-server`, then run:
+
+```sh
+sh scripts/check-static-binary.sh dist/cvmfs-status-server
+docker build --target production --build-arg BINARY_SOURCE=prebuilt \
+  -t cvmfs-status-server:local .
+```
+
+Use the binary matching the build host's Linux architecture. A normal
+`docker compose build` compiles it from source for musl instead.
 
 ## Cutover and rollback
 
