@@ -12,7 +12,7 @@ import unittest
 
 INSTALLER = Path(__file__).resolve().parents[1] / "scripts" / "install.sh"
 BINARY = "cvmfs-status-page-rust"
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 
 class InstallerTests(unittest.TestCase):
@@ -184,7 +184,7 @@ esac
 
     def test_wrong_version_preserves_existing_binary(self):
         original = self.existing_binary()
-        self.make_release(reported_version="0.0.3")
+        self.make_release(reported_version="0.0.1")
         self.assert_preserved(self.run_installer(), original)
 
     def test_failed_version_probe_preserves_binary_and_stderr(self):

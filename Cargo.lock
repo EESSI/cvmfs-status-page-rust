@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "cvmfs-status-page-rust"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -2470,7 +2470,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "status-alert-webhook"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "reqwest",
  "serde_json",
@@ -2482,7 +2482,7 @@ dependencies = [
 
 [[package]]
 name = "status-alerting"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "futures",
  "serde",
@@ -2494,7 +2494,7 @@ dependencies = [
 
 [[package]]
 name = "status-application"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2513,7 +2513,7 @@ dependencies = [
 
 [[package]]
 name = "status-checkpoint"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -2525,7 +2525,7 @@ dependencies = [
 
 [[package]]
 name = "status-domain"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "status-evaluation"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "rhai",
  "status-model",
@@ -2550,7 +2550,7 @@ dependencies = [
 
 [[package]]
 name = "status-feed"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -2571,7 +2571,7 @@ dependencies = [
 
 [[package]]
 name = "status-framework"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "status-alerting",
  "status-checkpoint",
@@ -2584,7 +2584,7 @@ dependencies = [
 
 [[package]]
 name = "status-framework-fs"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "fs2",
  "status-alerting",
@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "status-http"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "actix-web",
  "futures",
@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "status-model"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "thiserror",
@@ -2620,7 +2620,7 @@ dependencies = [
 
 [[package]]
 name = "status-presentation"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2639,7 +2639,7 @@ dependencies = [
 
 [[package]]
 name = "status-publication"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "serde",
@@ -2651,7 +2651,7 @@ dependencies = [
 
 [[package]]
 name = "status-sources"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2671,7 +2671,7 @@ dependencies = [
 
 [[package]]
 name = "status-storage"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "serde",
@@ -2686,7 +2686,7 @@ dependencies = [
 
 [[package]]
 name = "status-storage-fs"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2703,7 +2703,7 @@ dependencies = [
 
 [[package]]
 name = "status-theme"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "serde_json",

@@ -6,7 +6,7 @@ default-members = ["apps/cvmfs-status-page-rust"]
 exclude = [".html-reference", ".live-reference"]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 authors = ["Terje Kvernes <terje@kvernes.no>"]
 repository = "https://github.com/EESSI/cvmfs-status-page-rust"

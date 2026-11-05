@@ -17,7 +17,7 @@ pub enum MaintenanceCommand {
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
-    /// Release tag or version to install (for example v0.0.2); allows downgrades.
+    /// Release tag or version to install (for example v0.0.3); allows downgrades.
     #[arg(long, value_name = "TAG", value_parser = release_tag)]
     tag: Option<String>,
     /// Skip the confirmation prompt (required when stdin is not a terminal).
@@ -62,7 +62,7 @@ impl MaintenanceCommand {
 fn release_tag(value: &str) -> Result<String, String> {
     let version = value.strip_prefix('v').unwrap_or(value);
     Version::parse(version)
-        .map_err(|_| "expected a release tag or version, such as v0.0.2 or 0.0.2".to_owned())?;
+        .map_err(|_| "expected a release tag or version, such as v0.0.3 or 0.0.3".to_owned())?;
     Ok(format!("v{version}"))
 }
 

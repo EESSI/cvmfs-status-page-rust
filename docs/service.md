@@ -1,6 +1,6 @@
 # Running the status service
 
-The unreleased workspace adds `cvmfs-status-server` alongside the retained
+Release v0.0.3 adds `cvmfs-status-server` alongside the retained
 `cvmfs-status-page-rust` generator. Both binaries use the same collection,
 evaluation, history and presentation pipeline. Existing `config.json`, public
 JSON schemas, metric families and destination template customization remain
@@ -8,9 +8,9 @@ supported within the [documented compatibility scope](compatibility.md#what-outp
 Both binaries have [upgrade requirements](compatibility.md#changes-affecting-cron-users),
 including writer locks, path/template restrictions and configuration limits.
 The generator can still run under cron; adopting the service is optional.
-Build both with `cargo build --release --locked`. The published v0.0.2 archives
-contain only the generator; the service instructions here apply to unreleased
-source builds.
+Both binaries are included in the v0.0.3 release archives; see the
+[manual installation steps](../README.md#manual-prebuilt-install). You can also
+build both with `cargo build --release --locked`. For a source build:
 
 ```sh
 ./target/release/cvmfs-status-server \
@@ -164,15 +164,15 @@ and executes the service as PID 1; there is no shell or package manager.
 CI builds and smoke-tests the actual production image on native amd64 and arm64
 runners, including packaging a prebuilt binary. Tagged releases reuse the exact
 server binary from each checksum-verified release archive and publish a combined
-image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z`. Architecture tags
-are `vX.Y.Z-amd64` and `vX.Y.Z-arm64`; there is no `latest` tag. The archives
+image manifest at `ghcr.io/eessi/cvmfs-status-page-rust:v0.0.3`. Architecture tags
+are `v0.0.3-amd64` and `v0.0.3-arm64`; there is no `latest` tag. The archives
 contain both static binaries. The installer continues installing the generator;
 extract `cvmfs-status-server` from the archive to install the standalone service.
 
 For standalone installations, `cvmfs-status-server self-update` installs the latest
-stable release; `--tag vX.Y.Z` selects a specific release and `--yes` skips
+stable release; `--tag v0.0.3` selects a specific release and `--yes` skips
 confirmation. Restart the service after replacing its executable. See the
-[in-place update guide](../README.md#in-place-updates-unreleased) for verification,
+[in-place update guide](../README.md#in-place-updates) for verification,
 permissions and rollback behavior. Update container deployments by replacing
 their image and recreating the container.
 
@@ -238,7 +238,7 @@ service settings. Mount individual configuration files so the rest of
 
 ### Docker Compose
 
-The service is unreleased; run these commands from the repository root to build
+Run these commands from the repository root to build
 the local image and start the supplied Compose deployment:
 
 ```sh
@@ -246,12 +246,10 @@ docker compose build
 docker compose up -d
 ```
 
-Once a release containing the service has been published, select its version
-tag with `CVMFS_STATUS_IMAGE` to use the prebuilt image. Replace `vX.Y.Z` below
-with that release tag; v0.0.2 predates the service and has no container image:
+Select the v0.0.3 tag with `CVMFS_STATUS_IMAGE` to use the prebuilt image:
 
 ```sh
-export CVMFS_STATUS_IMAGE=ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z
+export CVMFS_STATUS_IMAGE=ghcr.io/eessi/cvmfs-status-page-rust:v0.0.3
 docker compose up -d --no-build --pull always
 ```
 
