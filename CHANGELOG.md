@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update `cvmfs_server_scraper` to 0.1.1, adopting its security dependency refresh
+  and Tokio 1.54.1 minimum while preserving collection behavior and configuration.
 - Refresh workspace dependencies to their latest compatible releases, including
   SHA-2 0.11 for publication digests, alert identities and update verification.
 - GHCR production images now use `scratch` with only the static musl server and
