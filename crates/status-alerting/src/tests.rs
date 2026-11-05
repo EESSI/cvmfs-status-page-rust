@@ -23,6 +23,29 @@ fn alerts() -> Alerting {
     .unwrap()
 }
 #[test]
+fn policy_fingerprint_preserves_checkpoint_compatibility() {
+    assert_eq!(
+        alerts().fingerprint(),
+        "cb15ededbd7ef8f156ab9f11462eab42df5b1af046eb3b600271a7a05db43479"
+    );
+}
+#[test]
+fn delivery_id_preserves_deduplication_identity() {
+    let alerts = alerts();
+    let mut state = AlertState::default();
+    alerts
+        .observe(&mut state, &document(100, Health::Failed))
+        .unwrap();
+    alerts
+        .observe(&mut state, &document(110, Health::Failed))
+        .unwrap();
+    let delivery = alerts.claim(&mut state, at(110), 1).unwrap().pop().unwrap();
+    assert_eq!(
+        delivery.event.id(),
+        "27c80b9277ce41b1dc42a3e759bccd4b27dac1c751512002659a2533a72b4d66"
+    );
+}
+#[test]
 fn grace_survives_restart_and_trigger_severity_changes() {
     let alerts = alerts();
     let mut state = AlertState::default();
