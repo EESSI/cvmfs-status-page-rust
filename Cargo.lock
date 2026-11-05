@@ -732,9 +732,9 @@ dependencies = [
 
 [[package]]
 name = "cvmfs_server_scraper"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c73c0f0b2b90ffd0c6db0956af3e21c217984e4219f7fb2c0a84b7d99ad779"
+checksum = "0891a3e84ef62e72293338b548be692e465d1082687c31b6b61ea00d361350cf"
 dependencies = [
  "chrono",
  "futures",
