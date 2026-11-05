@@ -14,8 +14,8 @@ Usage:
   install.sh --version X.Y.Z --install-dir DIR
 
 Options:
-  --tag TAG          Release tag to install, for example v0.0.2.
-  --version VERSION  Release version to install, for example 0.0.2.
+  --tag TAG          Release tag to install, for example v0.0.3.
+  --version VERSION  Release version to install, for example 0.0.3.
   --install-dir DIR  Directory where ${binary_name} should be installed.
   --repo OWNER/REPO  GitHub repository to install from. Defaults to ${repo}.
   -h, --help         Show this help.
@@ -77,7 +77,7 @@ if [ -n "$version" ]; then
 elif [ -n "$tag" ]; then
     case "$tag" in
         v*) version="${tag#v}" ;;
-        *) die "--tag must start with v, for example v0.0.2" ;;
+        *) die "--tag must start with v, for example v0.0.3" ;;
     esac
 else
     die "one of --tag or --version is required"

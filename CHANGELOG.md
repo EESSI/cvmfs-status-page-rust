@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-11-05
+
 ### Added
 
 - `self-update` for the generator and service, using GitHub's latest stable
@@ -32,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recovery, and interrupted history maintenance recovery.
 - Non-root amd64/arm64 production images, read-only Compose deployment,
   compatibility fixtures, container smoke tests and migration guidance.
-- Deployment comparison and a [cron compatibility and upgrade guide](docs/compatibility.md)
+- Deployment comparison and a [cron compatibility and upgrade guide](https://github.com/EESSI/cvmfs-status-page-rust/blob/v0.0.3/docs/compatibility.md)
   covering the v0.0.2 output comparison scope, operational differences, validation
   and rollback while retaining static generation.
 
@@ -62,13 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   host identities, invalid repository names and empty
   effective S3 selections are rejected. Response-size caps, request timeouts,
   stricter manifests and GeoAPI validation can reject formerly accepted responses.
-  Review the [migration limits](docs/compatibility.md#configuration-and-upstream-validation).
+  Review the [migration limits](https://github.com/EESSI/cvmfs-status-page-rust/blob/v0.0.3/docs/compatibility.md#configuration-and-upstream-validation).
 - **Breaking for consumers of publication times:** absent manifest timestamps now
   appear as `null` in enriched JSON/raw history and have no timestamp metric or
   computed lag. Accept nullable times and optional `failed_repositories` arrays
   in custom consumers/templates. Revisions/catalogue sizes now retain `u64` and
   TTLs `u32`; preserve a complete state backup for rollback to older binaries.
-- **Breaking for service deadline settings on unreleased main:** collection
+- **Breaking for service deadline settings in earlier development builds:** collection
   deadlines accept 1–3600 seconds instead of 1–86400; reduce larger values before
   upgrading. Server deadlines start on admission, so more than eight servers may
   require multiple batches; allow enough time between cron runs.

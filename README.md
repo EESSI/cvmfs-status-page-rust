@@ -4,7 +4,7 @@ This repository contains an EESSI status page generator and an Actix service.
 Both collect CVMFS status through the same pipeline. The generator writes a static
 site; the service publishes complete durable generations over HTTP.
 
-The service and workspace layout are currently **unreleased**. See the
+The service and workspace layout are available starting with **v0.0.3**. See the
 [service deployment and migration guide](docs/service.md) and
 [internal architecture](docs/architecture.md). The existing generator CLI remains
 supported, with [upgrade requirements for existing cron
@@ -19,15 +19,23 @@ These APIs remain unpublished; the CVMFS service keeps its existing behavior.
 
 ## Current release
 
-[v0.0.2](https://github.com/EESSI/cvmfs-status-page-rust/releases/tag/v0.0.2)
-was released on **2026-09-20** with static musl Linux binaries for x86_64 and
-aarch64. Compatibility no longer depends on glibc. Archives include SHA-256
-checksums, and the installer supports replacing an existing binary.
-See the [changelog](CHANGELOG.md).
+[v0.0.3](https://github.com/EESSI/cvmfs-status-page-rust/releases/tag/v0.0.3)
+was released on **2026-11-05** with the standalone HTTP service, durable
+publication and recovery, bounded CVMFS collection, and in-place self-updates.
+Static musl archives for x86_64 and aarch64 contain both binaries and include
+SHA-256 checksums. The service is also available as a minimal container image
+for both architectures. Updated dependencies include `cvmfs_server_scraper`
+0.1.1 and rustls 0.23.46 with four security fixes. See the [changelog](CHANGELOG.md).
+
+**Upgrading from v0.0.2:** use the installer or a manual installation to obtain
+v0.0.3; v0.0.2 does not have `self-update`. Stop existing writers, back up the
+complete destination and history, and review the [cron upgrade requirements](#upgrading-existing-cron-installations)
+for path/configuration restrictions, collection deadlines, private state files,
+and nullable publication timestamps. Adopting the HTTP service is optional.
 
 **Upgrading from v0.0.1:** archive and checksum names now use
 `unknown-linux-musl` instead of `unknown-linux-gnu`. Update direct download URLs
-or use the v0.0.2 installer shown below. An installer pinned to v0.0.1 cannot
+or use the v0.0.3 installer shown below. An installer pinned to v0.0.1 cannot
 select the new asset names. The updated installer still supports installing
 v0.0.1's original GNU assets. HTTPS continues to use the system CA certificates.
 
@@ -43,31 +51,31 @@ overwriting local customizations.
 
 | Deployment | How it runs | Output and state | Availability |
 | --- | --- | --- | --- |
-| Static generator with cron or a timer | Run `cvmfs-status-page-rust` once per scheduled update; an existing web server serves the files. | `--destination` holds public files, templates and persistent state. | Available in v0.0.2 and retained on `main`. |
-| Standalone HTTP service | Run `cvmfs-status-server` continuously under a process supervisor, behind a reverse proxy. | Serves generated artifacts directly; `--state-directory` holds private state. | Unreleased; build from `main`. |
-| HTTP service in Docker/Compose | Run the same service in a minimal musl-based `scratch` image using `compose.yaml`. | A persistent volume holds private state; configuration and overrides are mounted read-only. | Unreleased; build locally. Future tags publish amd64/arm64 images to GHCR. |
+| Static generator with cron or a timer | Run `cvmfs-status-page-rust` once per scheduled update; an existing web server serves the files. | `--destination` holds public files, templates and persistent state. | Available in v0.0.3; existing CLI options remain supported. |
+| Standalone HTTP service | Run `cvmfs-status-server` continuously under a process supervisor, behind a reverse proxy. | Serves generated artifacts directly; `--state-directory` holds private state. | Included in v0.0.3 release archives. |
+| HTTP service in Docker/Compose | Run the same service in a minimal musl-based `scratch` image using `compose.yaml`. | A persistent volume holds private state; configuration and overrides are mounted read-only. | Published to GHCR for amd64/arm64 as `v0.0.3`, or build locally. |
 
 The service is optional. Existing cron deployments can continue generating static
-files. The v0.0.2 installation commands below install the released generator;
-they do not install the unreleased service or the changes currently on `main`.
+files. The v0.0.3 installer commands below install the generator. To install the
+standalone service, extract `cvmfs-status-server` from the same release archive.
 `cargo build --release --locked` builds both CVMFS binaries from this checkout.
 See the [service guide](docs/service.md) for standalone startup, listener settings,
 Docker/Compose, template overrides, operations, and cutover/rollback instructions.
 
-Tagged releases containing the service will also publish
-`ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z`, with the same static server binary
+The v0.0.3 release also publishes
+`ghcr.io/eessi/cvmfs-status-page-rust:v0.0.3`, with the same static server binary
 as the matching release archive. The image contains the server and HTTPS CA
 certificates, runs as UID/GID `10001:10001`, and has no shell or package manager.
 See [container deployment](docs/service.md#containers) for local builds and how
 to select a published image in Compose, [configuration files and mounts](docs/service.md#configuration-files-and-mounts),
 a complete [Docker run example](docs/service.md#docker-without-compose), and
-[service endpoints](docs/service.md#endpoints-and-monitoring). The existing
-v0.0.2 release predates these images.
+[service endpoints](docs/service.md#endpoints-and-monitoring). The v0.0.2
+release predates these images.
 
 ### Upgrading existing cron installations
 
-The changes below apply when upgrading from v0.0.2 to the unreleased workspace
-on `main`, even if you continue using `cvmfs-status-page-rust` under cron.
+The changes below apply when upgrading from v0.0.2 to v0.0.3, even if you
+continue using `cvmfs-status-page-rust` under cron.
 Existing CLI option names and the public HTML, JSON and Prometheus formats are
 retained. Frozen v0.0.2 output comparisons cover seven scenarios, with generated
 timestamps and unordered collections normalized. This establishes compatibility
@@ -129,16 +137,16 @@ Install or update a specific release with:
 
 ```sh
 repo=EESSI/cvmfs-status-page-rust
-curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.2/scripts/install.sh" \
-  | sh -s -- --tag v0.0.2 --install-dir /path/to/bin
+curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.3/scripts/install.sh" \
+  | sh -s -- --tag v0.0.3 --install-dir /path/to/bin
 ```
 
 You can also install by version:
 
 ```sh
 repo=EESSI/cvmfs-status-page-rust
-curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.2/scripts/install.sh" \
-  | sh -s -- --version 0.0.2 --install-dir /path/to/bin
+curl -fsSL "https://raw.githubusercontent.com/$repo/v0.0.3/scripts/install.sh" \
+  | sh -s -- --version 0.0.3 --install-dir /path/to/bin
 ```
 
 The install directory is required and must be writable by the current user. The
@@ -153,16 +161,16 @@ binary. Configuration, templates, resources, history, and generated output are
 left in place. Running processes keep using the old binary until their next run
 or restart.
 
-### In-place updates (unreleased)
+### In-place updates
 
-Builds containing the updater can replace their own executable from GitHub
+Starting with v0.0.3, both binaries can replace their own executable from GitHub
 Releases. Running without `--tag` selects GitHub's latest stable release, including
 major upgrades, and leaves the executable alone if that version is not newer:
 
 ```sh
 cvmfs-status-page-rust self-update
-cvmfs-status-page-rust self-update --tag v0.0.2
-cvmfs-status-page-rust self-update --tag 0.0.2 --yes
+cvmfs-status-page-rust self-update --tag v0.0.3
+cvmfs-status-page-rust self-update --tag 0.0.3 --yes
 ```
 
 `--tag` accepts a published semantic-version release with or without the leading
@@ -187,7 +195,7 @@ The service provides the same command:
 
 ```sh
 cvmfs-status-server self-update
-cvmfs-status-server self-update --tag vX.Y.Z --yes
+cvmfs-status-server self-update --tag v0.0.3 --yes
 ```
 
 Each command replaces only the executable invoked. Restart a running service to
@@ -196,7 +204,7 @@ and earlier contain only the generator. For container deployments, pull or build
 the desired image and recreate the container.
 
 Existing v0.0.2 installations need the installer or a manual installation to
-obtain a future release containing this command. Explicitly installing v0.0.2 or
+obtain v0.0.3 or newer. Explicitly installing v0.0.2 or
 an older release removes self-update support again.
 
 ### Manual prebuilt install
@@ -204,7 +212,7 @@ an older release removes self-update support again.
 Download the release asset for your architecture from GitHub Releases:
 
 ```sh
-version=0.0.2
+version=0.0.3
 target=x86_64-unknown-linux-musl
 package="cvmfs-status-page-rust-${version}-${target}"
 
@@ -213,6 +221,12 @@ curl -fsSLO "https://github.com/EESSI/cvmfs-status-page-rust/releases/download/v
 sha256sum -c "${package}.tar.gz.sha256"
 tar -xzf "${package}.tar.gz"
 install -m 0755 "${package}/cvmfs-status-page-rust" /path/to/bin/cvmfs-status-page-rust
+```
+
+To install the standalone HTTP service from the same extracted archive:
+
+```sh
+install -m 0755 "${package}/cvmfs-status-server" /path/to/bin/cvmfs-status-server
 ```
 
 ### Build from source

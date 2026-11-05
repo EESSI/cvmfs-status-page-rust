@@ -1,9 +1,8 @@
 # Compatibility and upgrading cron installations
 
-This guide covers upgrading the static generator from **v0.0.2** to the
-**unreleased workspace on `main`**. The same configuration and output validation
-also applies to the new HTTP service. Installing the published v0.0.2 binary does
-not introduce these unreleased changes.
+This guide covers upgrading the static generator from **v0.0.2** to
+**v0.0.3**. The same configuration and output validation also applies to the
+new HTTP service. Review these requirements before replacing either binary.
 
 You can keep your cron job, the `cvmfs-status-page-rust` binary name and CLI option
 names, and your existing static web server. Switching to `cvmfs-status-server` is
@@ -67,7 +66,7 @@ fallback when available.
 
 There is no generator CLI option to change this deadline. The HTTP service has
 `--collection-deadline-seconds`, defaulting to 120 and accepting **1–3600 seconds**
-(previously up to 86400 on unreleased `main`). Reduce larger settings before
+(previously up to 86400 in earlier development builds). Reduce larger settings before
 upgrading. Grafana's configured
 `timeout_seconds` still applies within that outer deadline. Rendering, persistence
 and export are additional work, and servers beyond the first eight queue for
@@ -217,8 +216,10 @@ publishes a complete in-memory bundle only after a successful commit.
 1. Stop the scheduled job and wait for active generators to exit. Save the old
    binary and back up the configuration, complete destination, custom templates
    and resources, plus any history directory outside the destination.
-2. Build the candidate with `cargo build --release --locked`. Before replacing
-   the installed binary, check configuration with
+2. Extract the v0.0.3 release archive using the [manual installation steps](../README.md#manual-prebuilt-install),
+   or build the candidate with `cargo build --release --locked`. Before replacing
+   the installed binary, check configuration with the candidate's
+   `--configuration /path/to/config.json --show-config` options. For a source build:
    `./target/release/cvmfs-status-page-rust --configuration /path/to/config.json --show-config`.
    This validates configuration only; it does not check output paths, templates,
    storage, network responses or collection duration.
