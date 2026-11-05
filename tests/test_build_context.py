@@ -72,9 +72,10 @@ class BuildContext(unittest.TestCase):
                 embedded_inputs.update(p for p in directory.rglob("*") if p.is_file())
         self.assertIn(ROOT / "crates/status-presentation/templates/404.html", embedded_inputs)
         rules = (ROOT / ".dockerignore").read_text().splitlines()
-        for target in [member / "Cargo.toml" for member in members] + sorted(embedded_inputs):
+        runtime_inputs = [ROOT / "scripts/check-static-binary.sh", ROOT / "dist/cvmfs-status-server"]
+        for target in [member / "Cargo.toml" for member in members] + sorted(embedded_inputs) + runtime_inputs:
             rel = target.relative_to(ROOT).as_posix()
-            self.assertIn(target.relative_to(ROOT).parts[0], copied)
+            self.assertTrue(target.relative_to(ROOT).parts[0] in copied or rel in copied, rel)
             included = False
             for rule in rules:
                 if fnmatch.fnmatch(rel, rule.lstrip("!")):

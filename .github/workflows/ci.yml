@@ -187,3 +187,13 @@ jobs:
         run: docker build --target production -t cvmfs-status-server:test .
       - name: Smoke test production image and recovery
         run: python3 tests/test_container.py cvmfs-status-server:test
+      - name: Verify packaging a prebuilt musl binary
+        run: |
+          mkdir -p dist
+          container="$(docker create cvmfs-status-server:test)"
+          docker cp "${container}:/usr/local/bin/cvmfs-status-server" dist/cvmfs-status-server
+          docker rm "$container"
+          chmod 0700 dist/cvmfs-status-server
+          sh scripts/check-static-binary.sh dist/cvmfs-status-server
+          docker build --target production --build-arg BINARY_SOURCE=prebuilt -t cvmfs-status-server:prebuilt .
+          python3 tests/test_container.py cvmfs-status-server:prebuilt --binary dist/cvmfs-status-server

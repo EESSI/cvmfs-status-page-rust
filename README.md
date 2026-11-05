@@ -45,7 +45,7 @@ overwriting local customizations.
 | --- | --- | --- | --- |
 | Static generator with cron or a timer | Run `cvmfs-status-page-rust` once per scheduled update; an existing web server serves the files. | `--destination` holds public files, templates and persistent state. | Available in v0.0.2 and retained on `main`. |
 | Standalone HTTP service | Run `cvmfs-status-server` continuously under a process supervisor, behind a reverse proxy. | Serves generated artifacts directly; `--state-directory` holds private state. | Unreleased; build from `main`. |
-| HTTP service in Docker/Compose | Run the same service using the supplied `Dockerfile` and `compose.yaml`. | A persistent volume holds private state; configuration and overrides are mounted read-only. | Unreleased; build the image locally. |
+| HTTP service in Docker/Compose | Run the same service in a minimal musl-based `scratch` image using `compose.yaml`. | A persistent volume holds private state; configuration and overrides are mounted read-only. | Unreleased; build locally. Future tags publish amd64/arm64 images to GHCR. |
 
 The service is optional. Existing cron deployments can continue generating static
 files. The v0.0.2 installation commands below install the released generator;
@@ -53,6 +53,16 @@ they do not install the unreleased service or the changes currently on `main`.
 `cargo build --release --locked` builds both CVMFS binaries from this checkout.
 See the [service guide](docs/service.md) for standalone startup, listener settings,
 Docker/Compose, template overrides, operations, and cutover/rollback instructions.
+
+Tagged releases containing the service will also publish
+`ghcr.io/eessi/cvmfs-status-page-rust:vX.Y.Z`, with the same static server binary
+as the matching release archive. The image contains the server and HTTPS CA
+certificates, runs as UID/GID `10001:10001`, and has no shell or package manager.
+See [container deployment](docs/service.md#containers) for local builds and how
+to select a published image in Compose, [configuration files and mounts](docs/service.md#configuration-files-and-mounts),
+a complete [Docker run example](docs/service.md#docker-without-compose), and
+[service endpoints](docs/service.md#endpoints-and-monitoring). The existing
+v0.0.2 release predates these images.
 
 ### Upgrading existing cron installations
 
@@ -600,8 +610,10 @@ status code values, and examples.
 Releases are created automatically by GitHub Actions when a version tag is
 pushed. The release workflow verifies the tag, runs formatting, clippy, and
 tests for the musl target, then builds static Linux release binaries for x86_64
-and aarch64. It checks static linkage and runs each binary's `--version` before
-publishing the GitHub Release.
+and aarch64. It checks static linkage and runs each binary's `--version`, then
+packages the server from each checked archive into a minimal `scratch` image.
+After both native images pass the container smoke tests, the workflow publishes
+their combined version tag to GHCR, followed by the GitHub Release.
 
 1. Update `[workspace.package].version` in `Cargo.toml` and refresh `Cargo.lock`.
 2. Move the relevant entries in `CHANGELOG.md` from `Unreleased` to a new
@@ -621,3 +633,7 @@ publishing the GitHub Release.
    - `cvmfs-status-page-rust-x.y.z-x86_64-unknown-linux-musl.tar.gz.sha256`
    - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-musl.tar.gz`
    - `cvmfs-status-page-rust-x.y.z-aarch64-unknown-linux-musl.tar.gz.sha256`
+7. Confirm that `ghcr.io/eessi/cvmfs-status-page-rust:vx.y.z` contains both
+   `linux/amd64` and `linux/arm64`. Architecture tags are `vx.y.z-amd64` and
+   `vx.y.z-arm64`. On the first publication, ensure the GHCR package visibility
+   is public so users can pull without authenticating.

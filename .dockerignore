@@ -9,3 +9,5 @@
 !Dockerfile
 !scripts/
 !scripts/check-static-binary.sh
+!dist/
+!dist/cvmfs-status-server

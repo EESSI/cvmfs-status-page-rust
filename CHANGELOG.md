@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- GHCR production images now use `scratch` with only the static musl server and
+  HTTPS CA bundle. Releases reuse the verified amd64/arm64 archive binaries;
+  local builds also target musl. Compose can select a published version through
+  `CVMFS_STATUS_IMAGE`. The image retains its non-root user and storage paths,
+  but no longer includes a shell or package manager.
 - Migrate to crates.io `cvmfs_server_scraper` 0.1.0 with a reusable client and
   bounded collection (eight servers, four repository jobs per server, 32 requests
   globally). Preserve completed repositories on partial failures and deadlines;
