@@ -99,7 +99,10 @@ impl Fixture {
         let digest = if matches!(artifact, Artifact::BadChecksum) {
             "0".repeat(64)
         } else {
-            format!("{:x}", Sha256::digest(&bytes))
+            Sha256::digest(&bytes)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect()
         };
         // Put the checksum first: it also contains the target and archive name.
         let mut assets = vec![];

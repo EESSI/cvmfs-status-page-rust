@@ -290,12 +290,12 @@ impl Alerting {
         if routes.len() > 32 || routes.iter().any(|r| !ids.insert(r.id())) {
             return Err(AlertError::Invalid("too many or duplicate routes"));
         }
-        let fingerprint = format!(
-            "{:x}",
-            Sha256::digest(
-                serde_json::to_vec(&(&namespace, &routes)).expect("serializable policies")
-            )
-        );
+        let fingerprint = Sha256::digest(
+            serde_json::to_vec(&(&namespace, &routes)).expect("serializable policies"),
+        )
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
         Ok(Self {
             namespace,
             routes,
@@ -384,17 +384,17 @@ impl Alerting {
                         return Err(AlertError::Capacity);
                     }
                     state.sequence = state.sequence.checked_add(1).ok_or(AlertError::Capacity)?;
-                    let id = format!(
-                        "{:x}",
-                        Sha256::digest(format!(
-                            "{}:{}:{}:{}:{}",
-                            self.namespace.as_str(),
-                            route.id.as_str(),
-                            component.id().as_str(),
-                            now.seconds(),
-                            state.sequence
-                        ))
-                    );
+                    let id = Sha256::digest(format!(
+                        "{}:{}:{}:{}:{}",
+                        self.namespace.as_str(),
+                        route.id.as_str(),
+                        component.id().as_str(),
+                        now.seconds(),
+                        state.sequence
+                    ))
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
                     state.pending.insert(
                         state.sequence,
                         Pending {

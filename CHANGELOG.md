@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Refresh workspace dependencies to their latest compatible releases, including
+  SHA-2 0.11 for publication digests, alert identities and update verification.
 - GHCR production images now use `scratch` with only the static musl server and
   HTTPS CA bundle. Releases reuse the verified amd64/arm64 archive binaries;
   local builds also target musl. Compose can select a published version through
@@ -104,6 +106,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve complete history samples appended after an interrupted JSONL write.
 - Unknown public URLs display a styled 404 page instead of a blank page, with
   a customizable `templates/404.html` override and a link back to the status page.
+
+### Security
+
+- Update rustls to 0.23.46 to fix session secrets in debug output
+  ([GHSA-c8m5-c952-6cm4](https://github.com/advisories/GHSA-c8m5-c952-6cm4)),
+  excessive Brotli certificate decompression allocations
+  ([GHSA-h2v8-394m-p7vv](https://github.com/advisories/GHSA-h2v8-394m-p7vv)),
+  unauthenticated key-exchange hint poisoning
+  ([GHSA-w44r-93j7-qv28](https://github.com/advisories/GHSA-w44r-93j7-qv28)),
+  and buffered application data exposure after ECH rejection
+  ([GHSA-vp88-798v-h67f](https://github.com/advisories/GHSA-vp88-798v-h67f)).
 
 ## [0.0.2] - 2026-09-20
 
